@@ -2,6 +2,7 @@
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
+  const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
 
   if (!dataSource || !config) {
     throw new Error('JIFF schedule assets are missing.');
@@ -379,6 +380,11 @@
     block.style.opacity = isDimmed ? '0.15' : '1';
     block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
 
+    if (width >= 22) {
+      block.classList.add('has-bookmark-toggle');
+      block.appendChild(createFilmBookmarkToggle(film, isBookmarked));
+    }
+
     if (width > 20) {
       const title = document.createElement('div');
       title.className = 'film-title-text';
@@ -391,11 +397,49 @@
     block.addEventListener('mouseleave', hideTooltip);
     block.addEventListener('click', event => {
       event.stopPropagation();
+
+      if (film.detailUrl) {
+        window.location.href = film.detailUrl;
+        return;
+      }
+
       toggleBookmark(film);
       renderDay();
     });
 
     return block;
+  }
+
+  function createFilmBookmarkToggle(film, isBookmarked) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.className = 'film-bookmark-toggle' + (isBookmarked ? ' is-active' : '');
+    button.setAttribute('aria-label', isBookmarked ? film.title + ' 관심 해제' : film.title + ' 관심 등록');
+    button.setAttribute('title', isBookmarked ? '관심 해제' : '관심 등록');
+    button.appendChild(createBookmarkIcon());
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleBookmark(film);
+      renderDay();
+    });
+
+    return button;
+  }
+
+  function createBookmarkIcon() {
+    const namespace = 'http://www.w3.org/2000/svg';
+    const icon = document.createElementNS(namespace, 'svg');
+    const use = document.createElementNS(namespace, 'use');
+
+    icon.setAttribute('class', 'film-bookmark-icon');
+    icon.setAttribute('viewBox', '0 0 24 24');
+    icon.setAttribute('aria-hidden', 'true');
+    use.setAttribute('href', STAR_SYMBOL_URL);
+    use.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', STAR_SYMBOL_URL);
+    icon.appendChild(use);
+
+    return icon;
   }
 
   function shouldDimFilm(film, isBookmarked, isSearchMatch) {
@@ -628,7 +672,12 @@
       parts.push('<span class="tt-tag">' + escapeHtml(tag) + '</span>');
     });
     parts.push('</div>');
-    parts.push('<div class="tt-bookmark-hint">' + (state.bookmarks.has(film.code) ? '★ 관심 등록됨 (클릭으로 해제)' : '클릭하여 관심 목록에 추가') + '</div>');
+    const bookmarkHint = state.bookmarks.has(film.code)
+      ? '별 아이콘으로 관심 해제'
+      : '별 아이콘으로 관심 등록';
+    const detailHint = film.detailUrl ? ' · 블록 클릭 시 상세 이동' : '';
+
+    parts.push('<div class="tt-bookmark-hint">' + bookmarkHint + detailHint + '</div>');
 
     dom.tooltip.innerHTML = parts.join('');
     dom.tooltip.classList.add('visible');
@@ -1017,19 +1066,23 @@
     if (!directorSource) return rows;
 
     return rows.map(row => {
-      const directorEntry = getDirectorEntry(row, directorSource);
+      const metaEntry = getScheduleMetaEntry(row, directorSource);
 
-      if (!directorEntry) return row;
+      if (!metaEntry) return row;
 
       return Object.assign({}, row, {
-        directorLabel: directorEntry.directorLabel || '',
-        directorNames: directorEntry.directorNames || [],
-        directorSearchText: (directorEntry.directorNames || []).join(' '),
+        directorLabel: metaEntry.directorLabel || '',
+        directorNames: metaEntry.directorNames || [],
+        directorSearchText: (metaEntry.directorNames || []).join(' '),
+        detailMovieId: metaEntry.detailMovieId || '',
+        detailUrl: metaEntry.detailUrl || '',
+        detailCandidates: metaEntry.detailCandidates || [],
+        hasMultipleDetails: Boolean(metaEntry.hasMultipleDetails),
       });
     });
   }
 
-  function getDirectorEntry(row, directorSource) {
+  function getScheduleMetaEntry(row, directorSource) {
     if (!directorSource) return null;
 
     if (directorSource.byCode && directorSource.byCode[row.code]) {
@@ -1047,11 +1100,7 @@
 
     if (matches.length === 0) return null;
 
-    return {
-      directorDisplays: uniqueValues(matches.flatMap(match => match.directorDisplays || [])),
-      directorLabel: uniqueValues(matches.flatMap(match => match.directorDisplays || [])).join(' · '),
-      directorNames: uniqueValues(matches.flatMap(match => match.directorNames || [])),
-    };
+    return mergeScheduleMetaEntries(matches);
   }
 
   function getDirectorLookupCandidates(row) {
@@ -1070,6 +1119,24 @@
     }
 
     return uniqueValues(candidates.filter(Boolean));
+  }
+
+  function mergeScheduleMetaEntries(entries) {
+    const detailCandidates = mergeDetailCandidates(entries.flatMap(entry => entry.detailCandidates || []));
+    const detailMovieId = detailCandidates.length === 1 ? detailCandidates[0].movieId : '';
+    const detailUrl = detailCandidates.length === 1 ? detailCandidates[0].url : '';
+    const directorDisplays = uniqueValues(entries.flatMap(entry => entry.directorDisplays || []));
+    const directorNames = uniqueValues(entries.flatMap(entry => entry.directorNames || []));
+
+    return {
+      detailMovieId,
+      detailUrl,
+      detailCandidates,
+      hasMultipleDetails: detailCandidates.length > 1,
+      directorDisplays,
+      directorLabel: directorDisplays.join(' · '),
+      directorNames,
+    };
   }
 
   function parseCSVLine(line) {
@@ -1141,6 +1208,16 @@
 
   function uniqueValues(values) {
     return Array.from(new Set(values.filter(Boolean)));
+  }
+
+  function mergeDetailCandidates(candidates) {
+    const seen = new Set();
+
+    return candidates.filter(candidate => {
+      if (!candidate || !candidate.movieId || seen.has(candidate.movieId)) return false;
+      seen.add(candidate.movieId);
+      return true;
+    });
   }
 
   function escapeHtml(value) {

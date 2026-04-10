@@ -41,12 +41,16 @@ async function main() {
 
     const directorDisplays = uniqueValues(detailEntries.map(detail => detail.directorLabel).filter(Boolean));
     const directorNames = uniqueValues(detailEntries.flatMap(detail => detail.directorNames));
-
-    if (directorDisplays.length === 0 && directorNames.length === 0) return;
+    const detailMovieId = entry.directMovieId || (entry.movieIds.length === 1 ? entry.movieIds[0] : '');
+    const detailCandidates = uniqueDetailCandidates(entry);
 
     byCode[code] = {
       movieIds: entry.movieIds,
       titles: entry.titles,
+      detailMovieId,
+      detailUrl: detailMovieId ? buildMovieUrl(detailMovieId) : '',
+      detailCandidates,
+      hasMultipleDetails: detailCandidates.length > 1,
       directorDisplays,
       directorLabel: directorDisplays.join(' · '),
       directorNames,
@@ -144,16 +148,21 @@ async function fetchMovieDetail(movieId) {
 
 function parseSchedulePage(html) {
   const entries = new Map();
-  const selectPattern = /<select[^>]*name="setMovie"[^>]*id="setMovie_([^"]+)"[^>]*>([\s\S]*?)<\/select>/gi;
-  let selectMatch = selectPattern.exec(html);
+  const cardPattern = /<div class="screen-sort[\s\S]*?<div class="button-list">[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/gi;
+  const cards = html.match(cardPattern) || [];
 
-  while (selectMatch) {
-    const code = decodeHtml(selectMatch[1]).trim();
-    const optionHtml = selectMatch[2];
+  cards.forEach(cardHtml => {
+    const code = cleanText(matchFirst(cardHtml, /<span class="number">([\s\S]*?)<\/span>/i));
+    if (!code) return;
+
+    const directMovieId = decodeHtml(
+      matchFirst(cardHtml, /<div class="title">\s*<a href="\/db\/movieView\.asp\?idx=([^&"]*)/i)
+    ).trim();
+    const directTitle = cleanText(matchFirst(cardHtml, /<div class="title">(?:\s*<a [^>]*>)?([\s\S]*?)(?:<\/a>)?<\/div>/i));
     const optionPattern = /<option[^>]*value="([^"]*)"[^>]*>([\s\S]*?)<\/option>/gi;
     const movieIds = [];
     const titles = [];
-    let optionMatch = optionPattern.exec(optionHtml);
+    let optionMatch = optionPattern.exec(cardHtml);
 
     while (optionMatch) {
       const movieId = decodeHtml(optionMatch[1]).trim();
@@ -164,27 +173,63 @@ function parseSchedulePage(html) {
         if (title) titles.push(title);
       }
 
-      optionMatch = optionPattern.exec(optionHtml);
+      optionMatch = optionPattern.exec(cardHtml);
     }
 
-    if (movieIds.length > 0) {
-      entries.set(code, {
-        movieIds: uniqueValues(movieIds),
-        titles: uniqueValues(titles),
-      });
+    if (directMovieId) {
+      movieIds.unshift(directMovieId);
     }
 
-    selectMatch = selectPattern.exec(html);
-  }
+    if (directTitle) {
+      titles.unshift(directTitle);
+    }
+
+    if (movieIds.length === 0 && !directMovieId) return;
+
+    entries.set(code, {
+      movieIds: uniqueValues(movieIds),
+      titles: uniqueValues(titles),
+      directMovieId,
+    });
+  });
 
   return entries;
 }
 
+function uniqueDetailCandidates(entry) {
+  const candidates = [];
+
+  if (entry.directMovieId) {
+    candidates.push({
+      title: entry.titles[0] || '',
+      movieId: entry.directMovieId,
+      url: buildMovieUrl(entry.directMovieId),
+    });
+  }
+
+  entry.movieIds.forEach((movieId, index) => {
+    candidates.push({
+      title: entry.titles[index] || '',
+      movieId,
+      url: buildMovieUrl(movieId),
+    });
+  });
+
+  const seen = new Set();
+
+  return candidates.filter(candidate => {
+    if (!candidate.movieId || seen.has(candidate.movieId)) return false;
+    seen.add(candidate.movieId);
+    return true;
+  });
+}
+
 function mergeCodeEntries(target, source) {
   source.forEach((entry, code) => {
-    const current = target.get(code) || { movieIds: [], titles: [] };
+    const current = target.get(code) || { movieIds: [], titles: [], directMovieId: '' };
     current.movieIds = uniqueValues(current.movieIds.concat(entry.movieIds));
     current.titles = uniqueValues(current.titles.concat(entry.titles));
+    current.directMovieId = current.directMovieId || entry.directMovieId || '';
     target.set(code, current);
   });
 }
@@ -212,6 +257,10 @@ function mergeLookupEntry(map, key, entry) {
   const current = map.get(key) || {
     movieIds: [],
     titles: [],
+    detailMovieId: '',
+    detailUrl: '',
+    detailCandidates: [],
+    hasMultipleDetails: false,
     directorDisplays: [],
     directorLabel: '',
     directorNames: [],
@@ -219,6 +268,10 @@ function mergeLookupEntry(map, key, entry) {
 
   current.movieIds = uniqueValues(current.movieIds.concat(entry.movieIds || []));
   current.titles = uniqueValues(current.titles.concat(entry.titles || []));
+  current.detailMovieId = current.detailMovieId || entry.detailMovieId || '';
+  current.detailUrl = current.detailUrl || entry.detailUrl || '';
+  current.detailCandidates = mergeDetailCandidates(current.detailCandidates, entry.detailCandidates);
+  current.hasMultipleDetails = current.detailCandidates.length > 1;
   current.directorDisplays = uniqueValues(current.directorDisplays.concat(entry.directorDisplays || []));
   current.directorNames = uniqueValues(current.directorNames.concat(entry.directorNames || []));
   current.directorLabel = current.directorDisplays.join(' · ');
@@ -230,6 +283,17 @@ function sortLookupObject(map) {
   return Object.fromEntries(
     Array.from(map.entries()).sort(([left], [right]) => left.localeCompare(right, 'ko'))
   );
+}
+
+function mergeDetailCandidates(current, next) {
+  const merged = (current || []).concat(next || []);
+  const seen = new Set();
+
+  return merged.filter(candidate => {
+    if (!candidate || !candidate.movieId || seen.has(candidate.movieId)) return false;
+    seen.add(candidate.movieId);
+    return true;
+  });
 }
 
 function extractDirectorBlockNames(html) {
@@ -318,4 +382,8 @@ function decodeHtml(value) {
     .replace(/&#39;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>');
+}
+
+function buildMovieUrl(movieId) {
+  return `${BASE_URL}/db/movieView.asp?idx=${encodeURIComponent(movieId)}`;
 }
