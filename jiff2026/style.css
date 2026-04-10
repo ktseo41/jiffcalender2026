@@ -85,11 +85,6 @@ body {
   border-color: var(--accent);
   color: var(--accent);
 }
-.day-tab.has-search-match {
-  color: var(--text);
-  border-color: rgba(200,168,75,0.28);
-  background: rgba(200,168,75,0.08);
-}
 .day-tab.has-search-match::after {
   content: '';
   position: absolute;
@@ -98,11 +93,8 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 10px rgba(200,168,75,0.7);
-}
-.day-tab.active.has-search-match {
-  box-shadow: 0 0 0 1px rgba(200,168,75,0.28);
+  background: #ff6b57;
+  box-shadow: 0 0 10px rgba(255,107,87,0.85);
 }
 
 /* CONTROLS BAR */
@@ -147,6 +139,14 @@ body {
   color: var(--text);
   font-size: var(--font-ui);
   font-family: inherit;
+}
+.search-input::-webkit-search-cancel-button,
+.search-input::-webkit-search-decoration,
+.search-input::-webkit-search-results-button,
+.search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
 }
 .search-input::placeholder {
   color: var(--text-faint);
