@@ -266,8 +266,9 @@
   }
 
   function renderDay() {
-    const totalWidth = getTotalWidth();
     const dayData = getCurrentDayData();
+    const timelineEnd = getTimelineEnd(dayData);
+    const totalWidth = getTotalWidth(timelineEnd);
     const venuesByGroup = getVenuesForDay(dayData);
     const filmsByVenue = groupFilmsByVenue(dayData);
 
@@ -282,28 +283,26 @@
     gridLines.style.width = totalWidth + 'px';
     dom.timelineContent.appendChild(gridLines);
 
-    renderTimeAxis(gridLines);
+    renderTimeAxis(gridLines, timelineEnd);
 
     config.venueGroups.forEach(group => {
       const venues = venuesByGroup[group.id];
       if (!state.activeGroups.has(group.id) || venues.length === 0) return;
-      renderVenueGroup(group, venues, filmsByVenue, totalWidth);
+      renderVenueGroup(group, venues, filmsByVenue, totalWidth, timelineEnd);
     });
 
     syncLabelScroll();
   }
 
-  function renderTimeAxis(gridLines) {
-    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= config.timeRange.end; minutes += 30) {
+  function renderTimeAxis(gridLines, timelineEnd) {
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
       const x = timeToX(minutes);
       const isHour = minutes % 60 === 0;
-      const hour = Math.floor(minutes / 60);
-      const remainder = minutes % 60;
 
       const mark = document.createElement('div');
       mark.className = 'time-mark' + (isHour ? ' full-hour' : '');
       mark.style.left = x + 'px';
-      mark.textContent = isHour ? hour + ':00' : hour + ':' + String(remainder).padStart(2, '0');
+      mark.textContent = formatAxisTime(minutes);
       dom.timeAxis.appendChild(mark);
 
       const line = document.createElement('div');
@@ -313,7 +312,7 @@
     }
   }
 
-  function renderVenueGroup(group, venues, filmsByVenue, totalWidth) {
+  function renderVenueGroup(group, venues, filmsByVenue, totalWidth, timelineEnd) {
     const labelHeader = document.createElement('div');
     labelHeader.className = 'venue-group-header';
     labelHeader.textContent = group.label;
@@ -326,7 +325,7 @@
 
     venues.forEach(venue => {
       dom.venueLabelScroll.appendChild(createVenueLabel(venue, group));
-      dom.timelineContent.appendChild(createVenueRow(filmsByVenue.get(venue) || [], totalWidth));
+      dom.timelineContent.appendChild(createVenueRow(filmsByVenue.get(venue) || [], totalWidth, timelineEnd));
     });
   }
 
@@ -344,28 +343,28 @@
     return label;
   }
 
-  function createVenueRow(films, totalWidth) {
+  function createVenueRow(films, totalWidth, timelineEnd) {
     const row = document.createElement('div');
     row.className = 'row-wrapper';
     row.style.width = totalWidth + 'px';
 
     films.forEach(film => {
-      row.appendChild(createFilmBlock(film));
+      row.appendChild(createFilmBlock(film, timelineEnd));
     });
 
     return row;
   }
 
-  function createFilmBlock(film) {
+  function createFilmBlock(film, timelineEnd) {
     const startMinutes = timeToMinutes(film.startTime);
-    const endMinutes = timeToMinutes(film.endTime);
+    const endMinutes = getFilmEndMinutes(film);
 
-    if (!startMinutes || !endMinutes || startMinutes > config.timeRange.end) {
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
       return document.createDocumentFragment();
     }
 
     const x = timeToX(startMinutes);
-    const width = Math.max(4, timeToX(Math.min(endMinutes, config.timeRange.end)) - x);
+    const width = Math.max(4, timeToX(Math.min(endMinutes, timelineEnd)) - x);
     const color = getSectionColor(film.section);
     const isBookmarked = state.bookmarks.has(film.code);
     const isSearchMatch = filmMatchesSearch(film);
@@ -939,8 +938,17 @@
     return mode ? mode.label : densityKey;
   }
 
-  function getTotalWidth() {
-    return Math.round((config.timeRange.end - config.timeRange.start) * getActiveDensityProfile().scale);
+  function getTimelineEnd(dayData) {
+    const latestEnd = dayData.reduce((maxEnd, film) => {
+      const filmEnd = getFilmEndMinutes(film);
+      return filmEnd === null ? maxEnd : Math.max(maxEnd, filmEnd);
+    }, config.timeRange.end);
+
+    return Math.max(config.timeRange.end, Math.ceil(latestEnd / 30) * 30);
+  }
+
+  function getTotalWidth(timelineEnd = config.timeRange.end) {
+    return Math.round((timelineEnd - config.timeRange.start) * getActiveDensityProfile().scale);
   }
 
   function timeToX(minutes) {
@@ -951,6 +959,28 @@
     if (!value) return null;
     const [hours, minutes] = value.split(':').map(Number);
     return hours * 60 + minutes;
+  }
+
+  function getFilmEndMinutes(film) {
+    const startMinutes = timeToMinutes(film.startTime);
+    const endMinutes = timeToMinutes(film.endTime);
+
+    if (startMinutes === null || endMinutes === null) return null;
+
+    return endMinutes <= startMinutes
+      ? endMinutes + (24 * 60)
+      : endMinutes;
+  }
+
+  function formatAxisTime(totalMinutes) {
+    const minutesInDay = 24 * 60;
+    const normalizedMinutes = totalMinutes >= minutesInDay
+      ? totalMinutes - minutesInDay
+      : totalMinutes;
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minutes = normalizedMinutes % 60;
+
+    return hours + ':' + String(minutes).padStart(2, '0');
   }
 
   function parseCSV(text) {
