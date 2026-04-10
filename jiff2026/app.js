@@ -11,6 +11,8 @@
     currentDay: config.defaultState.currentDay,
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
+    searchQuery: '',
+    normalizedSearchQuery: '',
     bookmarks: new Set(),
     bookmarkHighlight: false,
     densityMode: config.defaultState.densityMode,
@@ -43,6 +45,8 @@
     dom.dayTabs = document.getElementById('dayTabs');
     dom.venueFilters = document.getElementById('venueFilters');
     dom.legend = document.getElementById('legend');
+    dom.searchInput = document.getElementById('searchInput');
+    dom.searchClearBtn = document.getElementById('searchClearBtn');
     dom.densitySelector = document.getElementById('densitySelector');
     dom.densityHint = document.getElementById('densityHint');
     dom.bookmarkBtn = document.getElementById('bookmarkBtn');
@@ -63,6 +67,8 @@
     dom.dayTabs.addEventListener('click', handleDayTabClick);
     dom.venueFilters.addEventListener('click', handleVenueFilterClick);
     dom.legend.addEventListener('click', handleLegendClick);
+    dom.searchInput.addEventListener('input', handleSearchInput);
+    dom.searchClearBtn.addEventListener('click', clearSearch);
     dom.densitySelector.addEventListener('click', handleDensityClick);
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
@@ -164,6 +170,10 @@
     toggleSection(item.dataset.section);
   }
 
+  function handleSearchInput(event) {
+    setSearchQuery(event.target.value);
+  }
+
   function handleDensityClick(event) {
     const button = event.target.closest('[data-density]');
     if (!button) return;
@@ -201,13 +211,17 @@
     renderDayTabState();
     renderVenueFilterState();
     renderLegendState();
+    renderSearchControls();
     renderDensityControls();
     renderBookmarkHighlightState();
   }
 
   function renderDayTabState() {
+    const searchMatchDates = getSearchMatchDates();
+
     dom.dayTabs.querySelectorAll('[data-day]').forEach(button => {
       button.classList.toggle('active', button.dataset.day === state.currentDay);
+      button.classList.toggle('has-search-match', searchMatchDates.has(button.dataset.day));
     });
   }
 
@@ -226,6 +240,14 @@
 
   function renderBookmarkHighlightState() {
     dom.bookmarkHighlightBtn.classList.toggle('active', state.bookmarkHighlight);
+  }
+
+  function renderSearchControls() {
+    if (dom.searchInput.value !== state.searchQuery) {
+      dom.searchInput.value = state.searchQuery;
+    }
+
+    dom.searchClearBtn.classList.toggle('hidden', !hasSearchQuery());
   }
 
   function renderDensityControls() {
@@ -341,16 +363,17 @@
     const width = Math.max(4, timeToX(Math.min(endMinutes, config.timeRange.end)) - x);
     const color = getSectionColor(film.section);
     const isBookmarked = state.bookmarks.has(film.code);
-    const isDimmed = shouldDimFilm(film, isBookmarked);
+    const isSearchMatch = filmMatchesSearch(film);
+    const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
 
     const block = document.createElement('div');
     block.className = 'film-block' + (isBookmarked ? ' bookmarked' : '');
     block.style.left = x + 'px';
     block.style.width = width + 'px';
-    block.style.background = getFilmBackground(color, isBookmarked, isDimmed);
-    block.style.borderColor = getFilmBorderColor(color, isBookmarked, isDimmed);
+    block.style.background = getFilmBackground(color, isBookmarked, isSearchMatch, isDimmed);
+    block.style.borderColor = getFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed);
     block.style.opacity = isDimmed ? '0.15' : '1';
-    block.style.boxShadow = getFilmShadow(isBookmarked);
+    block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
 
     if (width > 20) {
       const title = document.createElement('div');
@@ -371,19 +394,33 @@
     return block;
   }
 
-  function shouldDimFilm(film, isBookmarked) {
+  function shouldDimFilm(film, isBookmarked, isSearchMatch) {
+    let hasActiveFilter = false;
+    let isVisible = true;
+
     if (state.bookmarkHighlight && state.bookmarks.size > 0) {
-      return !isBookmarked;
+      hasActiveFilter = true;
+      isVisible = isVisible && isBookmarked;
     }
 
     if (state.activeSections) {
-      return !state.activeSections.has(film.section);
+      hasActiveFilter = true;
+      isVisible = isVisible && state.activeSections.has(film.section);
     }
 
-    return false;
+    if (hasSearchQuery()) {
+      hasActiveFilter = true;
+      isVisible = isVisible && isSearchMatch;
+    }
+
+    return hasActiveFilter && !isVisible;
   }
 
-  function getFilmBackground(color, isBookmarked, isDimmed) {
+  function getFilmBackground(color, isBookmarked, isSearchMatch, isDimmed) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return color + 'f0';
+    }
+
     if (state.bookmarkHighlight && isBookmarked) {
       return color + 'ee';
     }
@@ -391,7 +428,11 @@
     return color + (isDimmed ? '22' : 'cc');
   }
 
-  function getFilmBorderColor(color, isBookmarked, isDimmed) {
+  function getFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '#f0d58a';
+    }
+
     if (state.bookmarkHighlight && isBookmarked) {
       return '#ffd700';
     }
@@ -399,7 +440,11 @@
     return color + (isDimmed ? '55' : 'ff');
   }
 
-  function getFilmShadow(isBookmarked) {
+  function getFilmShadow(isBookmarked, isSearchMatch) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '0 0 0 1px rgba(240,213,138,0.75), 0 6px 18px rgba(0,0,0,0.32)';
+    }
+
     if (state.bookmarkHighlight && isBookmarked) {
       return '0 0 0 2px #ffd70088, 0 2px 8px rgba(0,0,0,0.5)';
     }
@@ -477,6 +522,11 @@
     renderBookmarks();
     updateBookmarkCount();
     renderDay();
+  }
+
+  function clearSearch() {
+    setSearchQuery('');
+    dom.searchInput.focus();
   }
 
   function toggleBookmarksPanel() {
@@ -641,6 +691,13 @@
     renderDay();
   }
 
+  function setSearchQuery(query) {
+    state.searchQuery = query;
+    state.normalizedSearchQuery = normalizeSearchValue(query);
+    renderControls();
+    renderDay();
+  }
+
   function queueTimelineScroll(delay) {
     window.setTimeout(() => {
       dom.timelineScroll.scrollLeft = timeToX(config.timeRange.initialScroll) - 20;
@@ -653,6 +710,16 @@
 
   function getCurrentDayData() {
     return state.allData.filter(row => row.date === state.currentDay);
+  }
+
+  function getSearchMatchDates() {
+    if (!hasSearchQuery()) return new Set();
+
+    const dates = new Set();
+    state.allData.forEach(row => {
+      if (filmMatchesSearch(row)) dates.add(row.date);
+    });
+    return dates;
   }
 
   function groupFilmsByVenue(dayData) {
@@ -707,6 +774,23 @@
     }
 
     return '#5a5a6a';
+  }
+
+  function hasSearchQuery() {
+    return state.normalizedSearchQuery.length > 0;
+  }
+
+  function filmMatchesSearch(film) {
+    if (!hasSearchQuery()) return true;
+
+    const haystack = normalizeSearchValue([
+      film.title,
+      film.shorts,
+      film.section,
+      film.code,
+    ].filter(Boolean).join(' '));
+
+    return haystack.includes(state.normalizedSearchQuery);
   }
 
   function getResolvedDensityKey() {
@@ -833,6 +917,13 @@
       .trim()
       .split(/\s+/)
       .filter(Boolean);
+  }
+
+  function normalizeSearchValue(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function escapeHtml(value) {

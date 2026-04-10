@@ -21,6 +21,21 @@
 </div>
 
 <div id="controls">
+  <div class="search-controls">
+    <label class="filter-label" for="searchInput">검색</label>
+    <div class="search-shell">
+      <input
+        id="searchInput"
+        class="search-input"
+        type="search"
+        placeholder="영화 제목, 단편 목록, 섹션, 코드"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <button type="button" class="search-clear-btn" id="searchClearBtn" aria-label="검색어 지우기">✕</button>
+    </div>
+  </div>
+  <div class="sep"></div>
   <span class="filter-label">상영관</span>
   <div class="venue-filters" id="venueFilters"></div>
   <div class="sep"></div>

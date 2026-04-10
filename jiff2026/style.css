@@ -77,12 +77,32 @@ body {
   color: var(--text-dim);
   transition: all 0.15s;
   font-weight: 500;
+  position: relative;
 }
 .day-tab:hover { background: var(--surface2); color: var(--text); }
 .day-tab.active {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
+}
+.day-tab.has-search-match {
+  color: var(--text);
+  border-color: rgba(200,168,75,0.28);
+  background: rgba(200,168,75,0.08);
+}
+.day-tab.has-search-match::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(200,168,75,0.7);
+}
+.day-tab.active.has-search-match {
+  box-shadow: 0 0 0 1px rgba(200,168,75,0.28);
 }
 
 /* CONTROLS BAR */
@@ -95,6 +115,61 @@ body {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+.search-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 320px;
+  min-width: 240px;
+}
+.search-shell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 4px 6px 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.035);
+}
+.search-shell:focus-within {
+  border-color: rgba(200,168,75,0.45);
+  box-shadow: 0 0 0 1px rgba(200,168,75,0.12);
+}
+.search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: var(--font-ui);
+  font-family: inherit;
+}
+.search-input::placeholder {
+  color: var(--text-faint);
+}
+.search-clear-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: var(--font-ui);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+.search-clear-btn:hover {
+  color: var(--text);
+  border-color: rgba(200,168,75,0.35);
+}
+.search-clear-btn.hidden {
+  visibility: hidden;
+  pointer-events: none;
 }
 .filter-label { color: var(--text-dim); font-size: var(--font-ui); white-space: nowrap; }
 .venue-filters { display: flex; gap: 4px; flex-wrap: wrap; }
