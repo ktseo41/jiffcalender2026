@@ -13,7 +13,8 @@
     activeSections: null,
     bookmarks: new Set(),
     bookmarkHighlight: false,
-    zoomIdx: config.defaultState.zoomIndex,
+    densityMode: config.defaultState.densityMode,
+    resolvedDensityKey: null,
     mouseX: 0,
     mouseY: 0,
   };
@@ -24,8 +25,7 @@
   cacheDom();
   bindEvents();
   buildStaticUI();
-  applyLayoutVariables();
-  applyZoom();
+  applyDensitySettings();
   renderApp();
   queueTimelineScroll(100);
 
@@ -35,7 +35,7 @@
     switchDay,
     toggleGroup,
     toggleSection,
-    changeZoom,
+    setDensityMode,
     toggleBookmarkHighlight,
   };
 
@@ -43,9 +43,8 @@
     dom.dayTabs = document.getElementById('dayTabs');
     dom.venueFilters = document.getElementById('venueFilters');
     dom.legend = document.getElementById('legend');
-    dom.zoomOutBtn = document.getElementById('zoomOutBtn');
-    dom.zoomInBtn = document.getElementById('zoomInBtn');
-    dom.zoomLabel = document.getElementById('zoomLabel');
+    dom.densitySelector = document.getElementById('densitySelector');
+    dom.densityHint = document.getElementById('densityHint');
     dom.bookmarkBtn = document.getElementById('bookmarkBtn');
     dom.bookmarkCount = document.getElementById('bmCount');
     dom.bookmarkHighlightBtn = document.getElementById('bmHighlightBtn');
@@ -64,21 +63,22 @@
     dom.dayTabs.addEventListener('click', handleDayTabClick);
     dom.venueFilters.addEventListener('click', handleVenueFilterClick);
     dom.legend.addEventListener('click', handleLegendClick);
+    dom.densitySelector.addEventListener('click', handleDensityClick);
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
-    dom.zoomOutBtn.addEventListener('click', () => changeZoom(-1));
-    dom.zoomInBtn.addEventListener('click', () => changeZoom(1));
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
     dom.overlay.addEventListener('click', closeBookmarksPanel);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
     document.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('resize', handleWindowResize);
   }
 
   function buildStaticUI() {
     buildDayTabs();
     buildVenueFilters();
     buildLegend();
+    buildDensityControls();
   }
 
   function buildDayTabs() {
@@ -130,6 +130,22 @@
     dom.legend.appendChild(fragment);
   }
 
+  function buildDensityControls() {
+    const fragment = document.createDocumentFragment();
+
+    config.densityModes.forEach(mode => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'density-btn';
+      button.dataset.density = mode.id;
+      button.textContent = mode.label;
+      fragment.appendChild(button);
+    });
+
+    dom.densitySelector.innerHTML = '';
+    dom.densitySelector.appendChild(fragment);
+  }
+
   function handleDayTabClick(event) {
     const button = event.target.closest('[data-day]');
     if (!button) return;
@@ -148,6 +164,12 @@
     toggleSection(item.dataset.section);
   }
 
+  function handleDensityClick(event) {
+    const button = event.target.closest('[data-density]');
+    if (!button) return;
+    setDensityMode(button.dataset.density);
+  }
+
   function handleBookmarkListClick(event) {
     const button = event.target.closest('[data-bookmark-remove]');
     if (!button) return;
@@ -157,6 +179,15 @@
   function handleMouseMove(event) {
     state.mouseX = event.clientX;
     state.mouseY = event.clientY;
+  }
+
+  function handleWindowResize() {
+    if (state.densityMode !== 'auto') return;
+
+    const nextDensityKey = getResolvedDensityKey();
+    if (nextDensityKey === state.resolvedDensityKey) return;
+
+    rerenderDayWithDensity(nextDensityKey);
   }
 
   function renderApp() {
@@ -170,8 +201,8 @@
     renderDayTabState();
     renderVenueFilterState();
     renderLegendState();
+    renderDensityControls();
     renderBookmarkHighlightState();
-    updateZoomLabel();
   }
 
   function renderDayTabState() {
@@ -197,8 +228,14 @@
     dom.bookmarkHighlightBtn.classList.toggle('active', state.bookmarkHighlight);
   }
 
-  function updateZoomLabel() {
-    dom.zoomLabel.textContent = Math.round(getCurrentZoom() * 100) + '%';
+  function renderDensityControls() {
+    dom.densitySelector.querySelectorAll('[data-density]').forEach(button => {
+      button.classList.toggle('active', button.dataset.density === state.densityMode);
+    });
+
+    dom.densityHint.textContent = state.densityMode === 'auto'
+      ? '현재 ' + getDensityLabel(state.resolvedDensityKey)
+      : getDensityLabel(state.resolvedDensityKey) + ' 고정';
   }
 
   function renderDay() {
@@ -389,7 +426,7 @@
     Array.from(grouped.keys()).sort().forEach(date => {
       const day = dayLookup.get(date);
       const heading = day ? day.label + ' ' + day.sub : date;
-      html += '<div style="font-size:10px;color:var(--accent);font-weight:700;padding:8px 4px 4px;letter-spacing:.05em;">' + escapeHtml(heading) + '</div>';
+      html += '<div class="bm-day-heading">' + escapeHtml(heading) + '</div>';
 
       grouped.get(date)
         .sort((a, b) => a.startTime.localeCompare(b.startTime))
@@ -491,15 +528,14 @@
   }
 
   function positionTooltip() {
-    const zoom = getCurrentZoom();
     const tooltipWidth = 280;
     const tooltipHeight = dom.tooltip.offsetHeight || 150;
-    const mouseX = state.mouseX / zoom;
-    const mouseY = state.mouseY / zoom;
+    const mouseX = state.mouseX;
+    const mouseY = state.mouseY;
     let left = mouseX + 16;
     let top = mouseY + 16;
-    const viewportWidth = window.innerWidth / zoom;
-    const viewportHeight = window.innerHeight / zoom;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
 
     if (left + tooltipWidth > viewportWidth) left = mouseX - tooltipWidth - 10;
     if (top + tooltipHeight > viewportHeight) top = mouseY - tooltipHeight - 10;
@@ -512,14 +548,19 @@
     dom.tooltip.classList.remove('visible');
   }
 
-  function changeZoom(direction) {
-    const nextZoomIndex = Math.max(0, Math.min(config.zoomSteps.length - 1, state.zoomIdx + direction));
-    if (nextZoomIndex === state.zoomIdx) return;
+  function setDensityMode(mode) {
+    if (!config.densityModes.some(item => item.id === mode)) return;
+    if (mode === state.densityMode) return;
 
+    state.densityMode = mode;
+    rerenderDayWithDensity(getResolvedDensityKey());
+  }
+
+  function rerenderDayWithDensity(nextDensityKey) {
     const scrollRatio = dom.timelineScroll.scrollLeft / (dom.timelineScroll.scrollWidth || 1);
 
-    state.zoomIdx = nextZoomIndex;
-    applyZoom();
+    applyDensitySettings(nextDensityKey);
+    renderControls();
     renderDay();
 
     requestAnimationFrame(() => {
@@ -527,13 +568,25 @@
     });
   }
 
-  function applyZoom() {
-    document.documentElement.style.zoom = getCurrentZoom();
-    updateZoomLabel();
-  }
+  function applyDensitySettings(nextDensityKey = getResolvedDensityKey()) {
+    const profile = config.densityProfiles[nextDensityKey];
+    const rootStyle = document.documentElement.style;
 
-  function applyLayoutVariables() {
-    document.documentElement.style.setProperty('--row-h', config.layout.rowHeight + 'px');
+    state.resolvedDensityKey = nextDensityKey;
+
+    rootStyle.setProperty('--row-h', profile.rowHeight + 'px');
+    rootStyle.setProperty('--label-w', profile.labelWidth + 'px');
+    rootStyle.setProperty('--header-h', profile.headerHeight + 'px');
+    rootStyle.setProperty('--time-scale', String(profile.scale));
+    rootStyle.setProperty('--font-body', profile.bodyFont + 'px');
+    rootStyle.setProperty('--font-ui', profile.uiFont + 'px');
+    rootStyle.setProperty('--font-small', profile.smallFont + 'px');
+    rootStyle.setProperty('--font-tiny', profile.tinyFont + 'px');
+    rootStyle.setProperty('--font-tab', profile.tabFont + 'px');
+    rootStyle.setProperty('--font-logo', profile.logoFont + 'px');
+    rootStyle.setProperty('--font-logo-sub', profile.logoSubFont + 'px');
+    rootStyle.setProperty('--font-tooltip-title', profile.tooltipTitleFont + 'px');
+    rootStyle.setProperty('--font-bookmark-title', profile.bookmarkTitleFont + 'px');
   }
 
   function toggleBookmarkHighlight() {
@@ -656,16 +709,40 @@
     return '#5a5a6a';
   }
 
-  function getCurrentZoom() {
-    return config.zoomSteps[state.zoomIdx];
+  function getResolvedDensityKey() {
+    if (state.densityMode !== 'auto') return state.densityMode;
+    return getAutoDensityKey(window.innerWidth, window.innerHeight);
+  }
+
+  function getAutoDensityKey(width, height) {
+    const rules = config.autoDensityRules;
+
+    if (width >= rules.wideMinWidth && height >= rules.wideMinHeight) {
+      return 'wide';
+    }
+
+    if (width <= rules.compactMaxWidth || height <= rules.compactMaxHeight) {
+      return 'compact';
+    }
+
+    return 'default';
+  }
+
+  function getActiveDensityProfile() {
+    return config.densityProfiles[state.resolvedDensityKey || getResolvedDensityKey()];
+  }
+
+  function getDensityLabel(densityKey) {
+    const mode = config.densityModes.find(item => item.id === densityKey);
+    return mode ? mode.label : densityKey;
   }
 
   function getTotalWidth() {
-    return Math.round((config.timeRange.end - config.timeRange.start) * config.layout.scale);
+    return Math.round((config.timeRange.end - config.timeRange.start) * getActiveDensityProfile().scale);
   }
 
   function timeToX(minutes) {
-    return (minutes - config.timeRange.start) * config.layout.scale;
+    return (minutes - config.timeRange.start) * getActiveDensityProfile().scale;
   }
 
   function timeToMinutes(value) {
