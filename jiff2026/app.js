@@ -7,7 +7,7 @@
   }
 
   const state = {
-    allData: parseCSV(dataSource.csvRaw),
+    allData: enrichRows(parseCSV(dataSource.csvRaw)),
     currentDay: config.defaultState.currentDay,
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
@@ -550,6 +550,7 @@
     parts.push('<strong>상영관</strong> ' + escapeHtml(film.venue) + '<br>');
     parts.push('<strong>시간</strong> ' + escapeHtml(film.startTime + ' – ' + film.endTime));
     if (film.session) parts.push(' (' + escapeHtml(film.session) + ')');
+    if (film.directorLabel) parts.push('<br><strong>감독</strong> ' + escapeHtml(film.directorLabel));
     parts.push('<br>');
     if (film.code) parts.push('<strong>코드</strong> ' + escapeHtml(film.code));
     parts.push('</div>');
@@ -785,6 +786,8 @@
 
     const haystack = normalizeSearchValue([
       film.title,
+      film.directorLabel,
+      film.directorSearchText,
       film.shorts,
       film.section,
       film.code,
@@ -863,6 +866,67 @@
     return rows;
   }
 
+  function enrichRows(rows) {
+    const directorSource = window.JIFF_SCHEDULE_DIRECTORS;
+
+    if (!directorSource) return rows;
+
+    return rows.map(row => {
+      const directorEntry = getDirectorEntry(row, directorSource);
+
+      if (!directorEntry) return row;
+
+      return Object.assign({}, row, {
+        directorLabel: directorEntry.directorLabel || '',
+        directorNames: directorEntry.directorNames || [],
+        directorSearchText: (directorEntry.directorNames || []).join(' '),
+      });
+    });
+  }
+
+  function getDirectorEntry(row, directorSource) {
+    if (!directorSource) return null;
+
+    if (directorSource.byCode && directorSource.byCode[row.code]) {
+      return directorSource.byCode[row.code];
+    }
+
+    const candidates = getDirectorLookupCandidates(row);
+    const matches = candidates
+      .map(candidate => directorSource.byTitle && directorSource.byTitle[candidate]
+        ? directorSource.byTitle[candidate]
+        : directorSource.byNormalizedTitle
+          ? directorSource.byNormalizedTitle[normalizeSearchValue(candidate)]
+          : null)
+      .filter(Boolean);
+
+    if (matches.length === 0) return null;
+
+    return {
+      directorDisplays: uniqueValues(matches.flatMap(match => match.directorDisplays || [])),
+      directorLabel: uniqueValues(matches.flatMap(match => match.directorDisplays || [])).join(' · '),
+      directorNames: uniqueValues(matches.flatMap(match => match.directorNames || [])),
+    };
+  }
+
+  function getDirectorLookupCandidates(row) {
+    const candidates = [row.title];
+
+    if (row.title && row.title.includes(':')) {
+      candidates.push(row.title.split(':').pop().trim());
+    }
+
+    if (row.title && row.title.includes(' + ')) {
+      candidates.push(...row.title.split(' + ').map(part => part.trim()));
+    }
+
+    if (row.shorts) {
+      candidates.push(...row.shorts.split('/').map(part => part.trim()));
+    }
+
+    return uniqueValues(candidates.filter(Boolean));
+  }
+
   function parseCSVLine(line) {
     const fields = [];
     let current = '';
@@ -924,6 +988,10 @@
       .toLowerCase()
       .replace(/\s+/g, ' ')
       .trim();
+  }
+
+  function uniqueValues(values) {
+    return Array.from(new Set(values.filter(Boolean)));
   }
 
   function escapeHtml(value) {
