@@ -1,19 +1,22 @@
 (function initScheduleApp() {
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
+  const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
 
   if (!dataSource || !config) {
     throw new Error('JIFF schedule assets are missing.');
   }
 
+  const allData = enrichRows(parseCSV(dataSource.csvRaw));
+
   const state = {
-    allData: enrichRows(parseCSV(dataSource.csvRaw)),
+    allData,
     currentDay: config.defaultState.currentDay,
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
     searchQuery: '',
     normalizedSearchQuery: '',
-    bookmarks: new Set(),
+    bookmarks: loadBookmarks(allData),
     bookmarkHighlight: false,
     densityMode: config.defaultState.densityMode,
     resolvedDensityKey: null,
@@ -60,6 +63,7 @@
     dom.overlay = document.getElementById('overlay');
     dom.bookmarksPanel = document.getElementById('bookmarks-panel');
     dom.bookmarksList = document.getElementById('bookmarks-list');
+    dom.bookmarksDownloadBtn = document.getElementById('bookmarksDownloadBtn');
     dom.bookmarksCloseBtn = document.getElementById('bookmarksCloseBtn');
   }
 
@@ -73,6 +77,7 @@
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
+    dom.bookmarksDownloadBtn.addEventListener('click', downloadBookmarksCSV);
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
     dom.overlay.addEventListener('click', closeBookmarksPanel);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
@@ -453,6 +458,8 @@
   }
 
   function renderBookmarks() {
+    renderBookmarksDownloadState();
+
     if (state.bookmarks.size === 0) {
       dom.bookmarksList.innerHTML = '<div class="bp-empty">관심 목록이 비어 있어요.<br>영화 블록을 클릭해서<br>추가해 보세요.</div>';
       return;
@@ -502,6 +509,7 @@
   function updateBookmarkCount() {
     dom.bookmarkCount.textContent = state.bookmarks.size > 0 ? '(' + state.bookmarks.size + ')' : '';
     dom.bookmarkBtn.classList.toggle('has-items', state.bookmarks.size > 0);
+    renderBookmarksDownloadState();
 
     if (state.bookmarks.size === 0 && state.bookmarkHighlight) {
       state.bookmarkHighlight = false;
@@ -513,12 +521,14 @@
     if (state.bookmarks.has(film.code)) state.bookmarks.delete(film.code);
     else state.bookmarks.add(film.code);
 
+    persistBookmarks();
     renderBookmarks();
     updateBookmarkCount();
   }
 
   function removeBookmark(code) {
     state.bookmarks.delete(code);
+    persistBookmarks();
     renderBookmarks();
     updateBookmarkCount();
     renderDay();
@@ -527,6 +537,58 @@
   function clearSearch() {
     setSearchQuery('');
     dom.searchInput.focus();
+  }
+
+  function downloadBookmarksCSV() {
+    const rows = getBookmarkedRows();
+    if (rows.length === 0) return;
+
+    const header = [
+      '날짜',
+      '요일',
+      '상영관',
+      '상영회차',
+      '섹션',
+      '제목',
+      '감독',
+      '상영작(단편 목록)',
+      '시작시간',
+      '종료시간',
+      '상영코드',
+      '언어/등급/이벤트',
+    ];
+
+    const csvRows = [header].concat(rows.map(row => {
+      const day = dayLookup.get(row.date);
+      return [
+        row.date,
+        day ? day.sub : '',
+        row.venue,
+        row.session,
+        row.section,
+        row.title,
+        row.directorLabel || '',
+        row.shorts,
+        row.startTime,
+        row.endTime,
+        row.code,
+        row.meta,
+      ];
+    }));
+
+    const csvText = '\ufeff' + csvRows
+      .map(columns => columns.map(escapeCSVField).join(','))
+      .join('\n');
+    const blob = new Blob([csvText], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = 'jiff2026-bookmarks.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 
   function toggleBookmarksPanel() {
@@ -711,6 +773,59 @@
 
   function getCurrentDayData() {
     return state.allData.filter(row => row.date === state.currentDay);
+  }
+
+  function getBookmarkedRows() {
+    return state.allData
+      .filter(row => state.bookmarks.has(row.code))
+      .sort((left, right) => {
+        if (left.date !== right.date) return left.date.localeCompare(right.date);
+        if (left.startTime !== right.startTime) return left.startTime.localeCompare(right.startTime);
+        return left.venue.localeCompare(right.venue, 'ko');
+      });
+  }
+
+  function loadBookmarks(rows) {
+    const storedCodes = readStoredBookmarkCodes();
+    if (storedCodes.length === 0) return new Set();
+
+    const validCodes = new Set(rows.map(row => row.code).filter(Boolean));
+    const bookmarks = new Set(storedCodes.filter(code => validCodes.has(code)));
+
+    if (bookmarks.size !== storedCodes.length) {
+      writeStoredBookmarkCodes(Array.from(bookmarks));
+    }
+
+    return bookmarks;
+  }
+
+  function persistBookmarks() {
+    writeStoredBookmarkCodes(Array.from(state.bookmarks));
+  }
+
+  function readStoredBookmarkCodes() {
+    try {
+      const rawValue = window.localStorage.getItem(BOOKMARK_STORAGE_KEY);
+      if (!rawValue) return [];
+
+      const parsed = JSON.parse(rawValue);
+      return Array.isArray(parsed) ? uniqueValues(parsed.map(value => String(value || '').trim())) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function writeStoredBookmarkCodes(codes) {
+    try {
+      if (codes.length === 0) {
+        window.localStorage.removeItem(BOOKMARK_STORAGE_KEY);
+        return;
+      }
+
+      window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(uniqueValues(codes)));
+    } catch (error) {
+      // Ignore storage failures so the app still works in restrictive contexts.
+    }
   }
 
   function getSearchMatchDates() {
@@ -983,6 +1098,10 @@
       .filter(Boolean);
   }
 
+  function renderBookmarksDownloadState() {
+    dom.bookmarksDownloadBtn.disabled = state.bookmarks.size === 0;
+  }
+
   function normalizeSearchValue(value) {
     return String(value || '')
       .toLowerCase()
@@ -1001,5 +1120,12 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function escapeCSVField(value) {
+    const text = String(value || '');
+    return /[",\n]/.test(text)
+      ? '"' + text.replace(/"/g, '""') + '"'
+      : text;
   }
 })();

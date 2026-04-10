@@ -490,6 +490,30 @@ body {
   justify-content: space-between;
 }
 .bp-header h3 { font-size: var(--font-tooltip-title); color: var(--accent); font-family: 'Nanum Myeongjo', serif; }
+.bp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.bp-download {
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(200,168,75,0.28);
+  background: rgba(200,168,75,0.08);
+  color: var(--accent);
+  font-size: var(--font-tiny);
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.bp-download:hover {
+  border-color: rgba(200,168,75,0.5);
+  background: rgba(200,168,75,0.14);
+}
+.bp-download:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .bp-close { background: none; border: none; color: var(--text-dim); cursor: pointer; font-size: var(--font-logo); }
 #bookmarks-list { flex: 1; overflow-y: auto; padding: 8px; }
 .bm-item {
