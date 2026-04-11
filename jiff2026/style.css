@@ -687,7 +687,7 @@ body {
 }
 .legend-item {
   display: flex; align-items: center; gap: 4px;
-  font-size: var(--font-tiny); color: var(--text-dim);
+  font-size: calc(var(--font-tiny) * 1.1); color: var(--text-dim);
   cursor: pointer;
   padding: 2px 6px;
   background: transparent;
