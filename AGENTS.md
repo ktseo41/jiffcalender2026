@@ -4,7 +4,7 @@ Refer to these principles to maintain code quality, simplicity, and project cons
 For project documentation, start from `docs/meta--catalog.md` and use it as the single source of truth for document names and metadata.
 
 ## Current Project Context
-- Project: `jiff-schedule-timeline`
+- Project: `jiffcalendar2026`
 - Base file: `jiff2026.html`
 - Documentation catalog: `docs/meta--catalog.md`
 

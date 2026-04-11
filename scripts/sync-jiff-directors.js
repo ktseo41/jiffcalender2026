@@ -9,7 +9,7 @@ const OUTPUT_PATH = path.join(ROOT_DIR, 'jiff2026', 'directors.js');
 const BASE_URL = 'https://www.jeonjufest.kr';
 const TIMETABLE_DAY_NUMS = Array.from({ length: 10 }, (_, index) => index);
 const REQUEST_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (compatible; jiff-schedule-timeline/1.0)',
+  'User-Agent': 'Mozilla/5.0 (compatible; jiffcalendar2026/1.0)',
   Accept: 'text/html,application/xhtml+xml',
 };
 
