@@ -126,7 +126,7 @@ window.JIFF_SCHEDULE_CONFIG = Object.freeze({
     initialScroll: 10 * 60,
   }),
   defaultState: Object.freeze({
-    currentDay: '2026-04-30',
+    currentDay: '2026-04-29',
     activeGroups: ['cgv', 'mega', 'other'],
     densityMode: 'auto',
   }),

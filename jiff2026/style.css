@@ -74,16 +74,27 @@ body {
   font-size: var(--font-tab);
   white-space: nowrap;
   border: 1px solid transparent;
+  background: transparent;
   color: var(--text-dim);
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
   font-weight: 500;
   position: relative;
 }
-.day-tab:hover { background: var(--surface2); color: var(--text); }
+.day-tab:hover {
+  background: rgba(200,168,75,0.12);
+  border-color: rgba(200,168,75,0.28);
+  color: var(--accent);
+}
 .day-tab.active {
   background: var(--accent-dim);
   border-color: var(--accent);
   color: var(--accent);
+}
+.day-tab.active:hover {
+  background: rgba(122,101,41,0.92);
+  border-color: #dcc37a;
+  color: #f2e0a6;
+  box-shadow: inset 0 0 0 1px rgba(255,244,204,0.08);
 }
 .day-tab.has-search-match::after {
   content: '';
@@ -418,6 +429,24 @@ body {
   z-index: 1;
   min-width: 4px;
 }
+.film-block-link {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 6px;
+  color: inherit;
+  text-decoration: none;
+  z-index: 1;
+}
+.film-block.has-bookmark-toggle .film-block-link {
+  padding-right: 30px;
+}
+.film-block-link:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.9);
+  outline-offset: -2px;
+}
 .film-block.no-detail-action {
   cursor: default;
 }
@@ -466,6 +495,7 @@ body {
   cursor: pointer;
   opacity: 0.85;
   transition: opacity 0.15s, color 0.15s, transform 0.15s, filter 0.15s;
+  z-index: 2;
 }
 .film-bookmark-toggle:hover {
   opacity: 1;

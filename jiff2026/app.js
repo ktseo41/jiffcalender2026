@@ -2,6 +2,7 @@
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
+  const DAY_QUERY_PARAM = 'day';
   const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
 
   if (!dataSource || !config) {
@@ -12,7 +13,7 @@
 
   const state = {
     allData,
-    currentDay: config.defaultState.currentDay,
+    currentDay: resolveInitialDay(),
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
     searchQuery: '',
@@ -33,6 +34,7 @@
   buildStaticUI();
   applyDensitySettings();
   renderApp();
+  syncCurrentDayUrl();
   queueTimelineScroll(100);
 
   window.JIFFScheduleApp = {
@@ -89,6 +91,7 @@
     dom.overlay.addEventListener('click', closeOpenPanels);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
     document.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('popstate', handlePopState);
     window.addEventListener('resize', handleWindowResize);
   }
 
@@ -210,6 +213,17 @@
     if (nextDensityKey === state.resolvedDensityKey) return;
 
     rerenderDayWithDensity(nextDensityKey);
+  }
+
+  function handlePopState() {
+    const nextDay = resolveInitialDay();
+    if (nextDay === state.currentDay) return;
+
+    closeOpenPanels();
+    state.currentDay = nextDay;
+    renderDayTabState();
+    renderDay();
+    queueTimelineScroll(50);
   }
 
   function renderApp() {
@@ -387,35 +401,59 @@
     block.style.opacity = isDimmed ? '0.15' : '1';
     block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
 
+    const detailLink = film.detailUrl ? createFilmDetailLink(film) : null;
+
+    if (detailLink) {
+      block.appendChild(detailLink);
+    }
+
+    if (width > 20) {
+      const title = createFilmTitleText(film.title);
+      (detailLink || block).appendChild(title);
+    }
+
     if (width >= 22) {
       block.classList.add('has-bookmark-toggle');
       block.appendChild(createFilmBookmarkToggle(film, isBookmarked, block));
     }
 
-    if (width > 20) {
-      const title = document.createElement('div');
-      title.className = 'film-title-text';
-      title.textContent = film.title;
-      block.appendChild(title);
-    }
-
     block.addEventListener('mouseenter', () => showTooltip(film, color));
     block.addEventListener('mousemove', moveTooltip);
     block.addEventListener('mouseleave', hideTooltip);
-    block.addEventListener('click', event => {
-      event.stopPropagation();
 
-      if (film.detailUrl) {
-        window.location.href = film.detailUrl;
-        return;
-      }
-
-      if (film.hasMultipleDetails) {
+    if (film.hasMultipleDetails) {
+      block.addEventListener('click', event => {
+        event.stopPropagation();
         openDetailChooser(film);
-      }
-    });
+      });
+    }
 
     return block;
+  }
+
+  function createFilmDetailLink(film) {
+    const link = document.createElement('a');
+
+    link.className = 'film-block-link';
+    link.href = film.detailUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', film.title + ' 상세 페이지 새 탭 열기');
+    link.setAttribute('title', film.title + ' 상세 페이지 새 탭 열기');
+    link.addEventListener('click', event => {
+      event.stopPropagation();
+    });
+
+    return link;
+  }
+
+  function createFilmTitleText(titleText) {
+    const title = document.createElement('div');
+
+    title.className = 'film-title-text';
+    title.textContent = titleText;
+
+    return title;
   }
 
   function createFilmBookmarkToggle(film, isBookmarked, block) {
@@ -709,9 +747,9 @@
       const title = candidate.title || film.title || ('상영작 ' + String(index + 1));
 
       return [
-        '<a class="dc-item" href="' + escapeHtml(candidate.url) + '">',
+        '<a class="dc-item" href="' + escapeHtml(candidate.url) + '" target="_blank" rel="noopener noreferrer">',
         '<span class="dc-item-title">' + escapeHtml(title) + '</span>',
-        '<span class="dc-item-meta">상세 페이지 열기</span>',
+        '<span class="dc-item-meta">상세 페이지 새 탭 열기</span>',
         '</a>',
       ].join('');
     }).join('');
@@ -748,7 +786,7 @@
       ? '별 아이콘으로 관심 해제'
       : '별 아이콘으로 관심 등록';
     const detailHint = film.detailUrl
-      ? ' · 블록 클릭 시 상세 이동'
+      ? ' · 클릭 시 새 탭 열기'
       : film.hasMultipleDetails
         ? ' · 블록 클릭 시 상영작 목록 열기'
         : '';
@@ -841,10 +879,54 @@
   }
 
   function switchDay(date) {
+    if (!isValidDay(date) || state.currentDay === date) return;
+
     state.currentDay = date;
+    syncCurrentDayUrl();
     renderDayTabState();
     renderDay();
     queueTimelineScroll(50);
+  }
+
+  function resolveInitialDay() {
+    const urlDay = readCurrentDayFromUrl();
+    return urlDay || config.defaultState.currentDay;
+  }
+
+  function readCurrentDayFromUrl() {
+    try {
+      const url = new URL(window.location.href);
+      const date = url.searchParams.get(DAY_QUERY_PARAM);
+      return isValidDay(date) ? date : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function isValidDay(date) {
+    return config.days.some(day => day.date === date);
+  }
+
+  function syncCurrentDayUrl() {
+    if (!window.history || typeof window.history.replaceState !== 'function') return;
+
+    try {
+      const url = new URL(window.location.href);
+
+      if (state.currentDay === config.defaultState.currentDay) {
+        url.searchParams.delete(DAY_QUERY_PARAM);
+      } else {
+        url.searchParams.set(DAY_QUERY_PARAM, state.currentDay);
+      }
+
+      window.history.replaceState(
+        Object.assign({}, window.history.state, { currentDay: state.currentDay }),
+        '',
+        url.toString()
+      );
+    } catch (error) {
+      // Ignore URL sync failures so the schedule still renders normally.
+    }
   }
 
   function toggleGroup(groupId) {
