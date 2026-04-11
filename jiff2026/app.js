@@ -62,6 +62,11 @@
     dom.timelineContent = document.getElementById('timeline-content');
     dom.tooltip = document.getElementById('tooltip');
     dom.overlay = document.getElementById('overlay');
+    dom.detailChooserPanel = document.getElementById('detail-chooser-panel');
+    dom.detailChooserTitle = document.getElementById('detailChooserTitle');
+    dom.detailChooserSubtitle = document.getElementById('detailChooserSubtitle');
+    dom.detailChooserList = document.getElementById('detailChooserList');
+    dom.detailChooserCloseBtn = document.getElementById('detailChooserCloseBtn');
     dom.bookmarksPanel = document.getElementById('bookmarks-panel');
     dom.bookmarksList = document.getElementById('bookmarks-list');
     dom.bookmarksDownloadBtn = document.getElementById('bookmarksDownloadBtn');
@@ -80,7 +85,8 @@
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
     dom.bookmarksDownloadBtn.addEventListener('click', downloadBookmarksCSV);
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
-    dom.overlay.addEventListener('click', closeBookmarksPanel);
+    dom.detailChooserCloseBtn.addEventListener('click', closeDetailChooser);
+    dom.overlay.addEventListener('click', closeOpenPanels);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
     document.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('resize', handleWindowResize);
@@ -370,9 +376,10 @@
     const isBookmarked = state.bookmarks.has(film.code);
     const isSearchMatch = filmMatchesSearch(film);
     const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
+    const hasBlockAction = Boolean(film.detailUrl || film.hasMultipleDetails);
 
     const block = document.createElement('div');
-    block.className = 'film-block' + (isBookmarked ? ' bookmarked' : '');
+    block.className = 'film-block' + (isBookmarked ? ' bookmarked' : '') + (hasBlockAction ? '' : ' no-detail-action');
     block.style.left = x + 'px';
     block.style.width = width + 'px';
     block.style.background = getFilmBackground(color, isBookmarked, isSearchMatch, isDimmed);
@@ -403,8 +410,9 @@
         return;
       }
 
-      toggleBookmark(film);
-      renderDay();
+      if (film.hasMultipleDetails) {
+        openDetailChooser(film);
+      }
     });
 
     return block;
@@ -516,7 +524,7 @@
     renderBookmarksDownloadState();
 
     if (state.bookmarks.size === 0) {
-      dom.bookmarksList.innerHTML = '<div class="bp-empty">관심 목록이 비어 있어요.<br>영화 블록을 클릭해서<br>추가해 보세요.</div>';
+      dom.bookmarksList.innerHTML = '<div class="bp-empty">관심 목록이 비어 있어요.<br>오른쪽 별 아이콘으로<br>추가해 보세요.</div>';
       return;
     }
 
@@ -647,14 +655,66 @@
   }
 
   function toggleBookmarksPanel() {
+    if (dom.bookmarksPanel.classList.contains('open')) {
+      closeBookmarksPanel();
+      return;
+    }
+
+    closeDetailChooser();
     renderBookmarks();
-    dom.bookmarksPanel.classList.toggle('open');
-    dom.overlay.classList.toggle('open');
+    dom.bookmarksPanel.classList.add('open');
+    syncOverlayState();
   }
 
   function closeBookmarksPanel() {
     dom.bookmarksPanel.classList.remove('open');
-    dom.overlay.classList.remove('open');
+    syncOverlayState();
+  }
+
+  function openDetailChooser(film) {
+    closeBookmarksPanel();
+    hideTooltip();
+    renderDetailChooser(film);
+    dom.detailChooserPanel.setAttribute('aria-hidden', 'false');
+    dom.detailChooserPanel.classList.add('open');
+    syncOverlayState();
+  }
+
+  function closeDetailChooser() {
+    dom.detailChooserPanel.classList.remove('open');
+    dom.detailChooserPanel.setAttribute('aria-hidden', 'true');
+    dom.detailChooserTitle.textContent = '상영작 목록';
+    dom.detailChooserSubtitle.textContent = '';
+    dom.detailChooserList.innerHTML = '';
+    syncOverlayState();
+  }
+
+  function closeOpenPanels() {
+    closeBookmarksPanel();
+    closeDetailChooser();
+  }
+
+  function syncOverlayState() {
+    const hasOpenPanel = dom.bookmarksPanel.classList.contains('open') || dom.detailChooserPanel.classList.contains('open');
+    dom.overlay.classList.toggle('open', hasOpenPanel);
+  }
+
+  function renderDetailChooser(film) {
+    dom.detailChooserTitle.textContent = film.title || '상영작 목록';
+    dom.detailChooserSubtitle.textContent = [film.startTime + ' - ' + film.endTime, film.venue, film.section]
+      .filter(Boolean)
+      .join(' · ');
+
+    dom.detailChooserList.innerHTML = film.detailCandidates.map((candidate, index) => {
+      const title = candidate.title || film.title || ('상영작 ' + String(index + 1));
+
+      return [
+        '<a class="dc-item" href="' + escapeHtml(candidate.url) + '">',
+        '<span class="dc-item-title">' + escapeHtml(title) + '</span>',
+        '<span class="dc-item-meta">상세 페이지 열기</span>',
+        '</a>',
+      ].join('');
+    }).join('');
   }
 
   function showTooltip(film, color) {
@@ -687,7 +747,11 @@
     const bookmarkHint = state.bookmarks.has(film.code)
       ? '별 아이콘으로 관심 해제'
       : '별 아이콘으로 관심 등록';
-    const detailHint = film.detailUrl ? ' · 블록 클릭 시 상세 이동' : '';
+    const detailHint = film.detailUrl
+      ? ' · 블록 클릭 시 상세 이동'
+      : film.hasMultipleDetails
+        ? ' · 블록 클릭 시 상영작 목록 열기'
+        : '';
 
     parts.push('<div class="tt-bookmark-hint">' + bookmarkHint + detailHint + '</div>');
 

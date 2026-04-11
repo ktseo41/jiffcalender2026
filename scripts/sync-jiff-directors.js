@@ -162,6 +162,7 @@ function parseSchedulePage(html) {
     const optionPattern = /<option[^>]*value="([^"]*)"[^>]*>([\s\S]*?)<\/option>/gi;
     const movieIds = [];
     const titles = [];
+    const detailCandidates = [];
     let optionMatch = optionPattern.exec(cardHtml);
 
     while (optionMatch) {
@@ -171,6 +172,11 @@ function parseSchedulePage(html) {
       if (movieId) {
         movieIds.push(movieId);
         if (title) titles.push(title);
+        detailCandidates.push({
+          movieId,
+          title,
+          url: buildMovieUrl(movieId),
+        });
       }
 
       optionMatch = optionPattern.exec(cardHtml);
@@ -178,18 +184,24 @@ function parseSchedulePage(html) {
 
     if (directMovieId) {
       movieIds.unshift(directMovieId);
+      detailCandidates.unshift({
+        movieId: directMovieId,
+        title: directTitle,
+        url: buildMovieUrl(directMovieId),
+      });
     }
+
+    if (movieIds.length === 0 && !directMovieId) return;
 
     if (directTitle) {
       titles.unshift(directTitle);
     }
 
-    if (movieIds.length === 0 && !directMovieId) return;
-
     entries.set(code, {
       movieIds: uniqueValues(movieIds),
       titles: uniqueValues(titles),
       directMovieId,
+      detailCandidates: uniqueDetailCandidates({ detailCandidates }),
     });
   });
 
@@ -197,27 +209,9 @@ function parseSchedulePage(html) {
 }
 
 function uniqueDetailCandidates(entry) {
-  const candidates = [];
-
-  if (entry.directMovieId) {
-    candidates.push({
-      title: entry.titles[0] || '',
-      movieId: entry.directMovieId,
-      url: buildMovieUrl(entry.directMovieId),
-    });
-  }
-
-  entry.movieIds.forEach((movieId, index) => {
-    candidates.push({
-      title: entry.titles[index] || '',
-      movieId,
-      url: buildMovieUrl(movieId),
-    });
-  });
-
   const seen = new Set();
 
-  return candidates.filter(candidate => {
+  return (entry.detailCandidates || []).filter(candidate => {
     if (!candidate.movieId || seen.has(candidate.movieId)) return false;
     seen.add(candidate.movieId);
     return true;
@@ -226,10 +220,11 @@ function uniqueDetailCandidates(entry) {
 
 function mergeCodeEntries(target, source) {
   source.forEach((entry, code) => {
-    const current = target.get(code) || { movieIds: [], titles: [], directMovieId: '' };
+    const current = target.get(code) || { movieIds: [], titles: [], directMovieId: '', detailCandidates: [] };
     current.movieIds = uniqueValues(current.movieIds.concat(entry.movieIds));
     current.titles = uniqueValues(current.titles.concat(entry.titles));
     current.directMovieId = current.directMovieId || entry.directMovieId || '';
+    current.detailCandidates = mergeDetailCandidates(current.detailCandidates, entry.detailCandidates);
     target.set(code, current);
   });
 }

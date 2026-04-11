@@ -418,6 +418,13 @@ body {
   z-index: 1;
   min-width: 4px;
 }
+.film-block.no-detail-action {
+  cursor: default;
+}
+.film-block.no-detail-action:hover {
+  filter: brightness(1.08);
+  transform: none;
+}
 .film-block.has-bookmark-toggle {
   padding-right: 30px;
 }
@@ -511,6 +518,101 @@ body {
 .tt-tag { font-size: var(--font-tiny); padding: 2px 6px; border-radius: 10px; background: var(--surface3); color: var(--text-dim); }
 .tt-tag.gv { background: rgba(200,168,75,0.2); color: var(--accent); }
 .tt-bookmark-hint { font-size: var(--font-tiny); color: var(--text-faint); margin-top: 6px; text-align: right; }
+
+/* DETAIL CHOOSER */
+#detail-chooser-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: min(420px, calc(100vw - 32px));
+  max-height: min(72vh, 640px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.42);
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -48%) scale(0.98);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#detail-chooser-panel.open {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, -50%) scale(1);
+}
+.dc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.dc-heading {
+  min-width: 0;
+}
+.dc-heading h3 {
+  font-size: var(--font-tooltip-title);
+  font-family: 'Nanum Myeongjo', serif;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.dc-subtitle {
+  font-size: var(--font-tiny);
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.dc-close {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--font-logo);
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.dc-close:hover {
+  color: var(--text);
+  transform: scale(1.05);
+}
+#detailChooserList {
+  padding: 12px 18px 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dc-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.dc-item:hover {
+  background: var(--surface3);
+  border-color: rgba(200,168,75,0.32);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+}
+.dc-item-title {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.45;
+}
+.dc-item-meta {
+  font-size: var(--font-tiny);
+  color: var(--accent);
+}
 
 /* BOOKMARKS PANEL */
 #bookmarks-panel {
@@ -613,7 +715,7 @@ body {
   pointer-events: none;
 }
 
-/* OVERLAY for bookmarks close */
+/* OVERLAY for panels */
 #overlay {
   display: none;
   position: fixed; inset: 0;

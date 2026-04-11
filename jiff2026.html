@@ -57,6 +57,16 @@
 
 <div id="tooltip"></div>
 <div id="overlay"></div>
+<div id="detail-chooser-panel" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="detailChooserTitle">
+  <div class="dc-header">
+    <div class="dc-heading">
+      <h3 id="detailChooserTitle">상영작 목록</h3>
+      <p class="dc-subtitle" id="detailChooserSubtitle"></p>
+    </div>
+    <button type="button" class="dc-close" id="detailChooserCloseBtn" aria-label="상영작 목록 닫기">✕</button>
+  </div>
+  <div id="detailChooserList"></div>
+</div>
 <div id="bookmarks-panel">
   <div class="bp-header">
     <h3>★ 관심 목록</h3>
