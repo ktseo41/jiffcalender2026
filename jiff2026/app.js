@@ -382,7 +382,7 @@
 
     if (width >= 22) {
       block.classList.add('has-bookmark-toggle');
-      block.appendChild(createFilmBookmarkToggle(film, isBookmarked));
+      block.appendChild(createFilmBookmarkToggle(film, isBookmarked, block));
     }
 
     if (width > 20) {
@@ -410,7 +410,7 @@
     return block;
   }
 
-  function createFilmBookmarkToggle(film, isBookmarked) {
+  function createFilmBookmarkToggle(film, isBookmarked, block) {
     const button = document.createElement('button');
 
     button.type = 'button';
@@ -418,6 +418,18 @@
     button.setAttribute('aria-label', isBookmarked ? film.title + ' 관심 해제' : film.title + ' 관심 등록');
     button.setAttribute('title', isBookmarked ? '관심 해제' : '관심 등록');
     button.appendChild(createBookmarkIcon());
+    button.addEventListener('mouseenter', () => {
+      block.classList.add('bookmark-hovering');
+    });
+    button.addEventListener('mouseleave', () => {
+      block.classList.remove('bookmark-hovering');
+    });
+    button.addEventListener('focus', () => {
+      block.classList.add('bookmark-hovering');
+    });
+    button.addEventListener('blur', () => {
+      block.classList.remove('bookmark-hovering');
+    });
     button.addEventListener('click', event => {
       event.stopPropagation();
       toggleBookmark(film);
