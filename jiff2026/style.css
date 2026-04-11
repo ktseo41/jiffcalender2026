@@ -520,13 +520,25 @@ body {
   border-radius: 4px;
   cursor: pointer;
   overflow: hidden;
-  transition: filter 0.1s, transform 0.1s;
   display: flex;
   align-items: center;
   padding: 0 6px;
   border: 1px solid rgba(0,0,0,0.2);
   z-index: 1;
   min-width: 4px;
+  isolation: isolate;
+  transition: border-color 0.12s ease;
+}
+.film-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255,255,255,0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 0;
 }
 .film-block-link {
   position: absolute;
@@ -549,22 +561,20 @@ body {
 .film-block.no-detail-action {
   cursor: default;
 }
-.film-block.no-detail-action:hover {
-  filter: brightness(1.08);
-  transform: none;
-}
 .film-block.has-bookmark-toggle {
   padding-right: 30px;
 }
 .film-block:hover {
-  filter: brightness(1.25);
-  transform: scaleY(1.05);
   z-index: 100;
 }
+.film-block:hover::after {
+  opacity: 1;
+}
 .film-block.bookmark-hovering:hover {
-  filter: none;
-  transform: none;
   z-index: 100;
+}
+.film-block.bookmark-hovering:hover::after {
+  opacity: 0;
 }
 .film-title-text {
   font-size: var(--font-small);
@@ -576,6 +586,8 @@ body {
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
   pointer-events: none;
   flex: 1;
+  position: relative;
+  z-index: 1;
 }
 .film-bookmark-toggle {
   position: absolute;
@@ -593,21 +605,22 @@ body {
   color: rgba(255,255,255,0.92);
   cursor: pointer;
   opacity: 0.85;
-  transition: opacity 0.15s, color 0.15s, transform 0.15s, filter 0.15s;
+  transition: opacity 0.15s, color 0.15s;
   z-index: 2;
+}
+.film-bookmark-toggle:focus-visible {
+  outline: 1px solid rgba(255,255,255,0.9);
+  outline-offset: -2px;
 }
 .film-bookmark-toggle:hover {
   opacity: 1;
   color: #fff2b3;
-  transform: scale(1.08);
-  filter: drop-shadow(0 0 5px rgba(255,242,179,0.72));
 }
 .film-bookmark-toggle.is-active {
   color: #f4d56a;
 }
 .film-bookmark-toggle.is-active:hover {
   color: #ffe27d;
-  filter: drop-shadow(0 0 6px rgba(255,226,125,0.85));
 }
 .film-bookmark-icon {
   width: 17px;
@@ -619,9 +632,20 @@ body {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transform-origin: center;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.film-bookmark-toggle:hover .film-bookmark-icon,
+.film-bookmark-toggle:focus-visible .film-bookmark-icon {
+  transform: scale(1.06);
+  filter: drop-shadow(0 0 5px rgba(255,242,179,0.72));
 }
 .film-bookmark-toggle.is-active .film-bookmark-icon {
   fill: currentColor;
+}
+.film-bookmark-toggle.is-active:hover .film-bookmark-icon,
+.film-bookmark-toggle.is-active:focus-visible .film-bookmark-icon {
+  filter: drop-shadow(0 0 6px rgba(255,226,125,0.85));
 }
 
 /* TOOLTIP */
