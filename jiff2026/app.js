@@ -71,6 +71,7 @@
     dom.detailChooserCloseBtn = document.getElementById('detailChooserCloseBtn');
     dom.bookmarksPanel = document.getElementById('bookmarks-panel');
     dom.bookmarksList = document.getElementById('bookmarks-list');
+    dom.bookmarksClearBtn = document.getElementById('bookmarksClearBtn');
     dom.bookmarksDownloadBtn = document.getElementById('bookmarksDownloadBtn');
     dom.bookmarksCloseBtn = document.getElementById('bookmarksCloseBtn');
   }
@@ -85,6 +86,7 @@
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
+    dom.bookmarksClearBtn.addEventListener('click', clearAllBookmarks);
     dom.bookmarksDownloadBtn.addEventListener('click', downloadBookmarksCSV);
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
     dom.detailChooserCloseBtn.addEventListener('click', closeDetailChooser);
@@ -281,9 +283,11 @@
       button.classList.toggle('active', button.dataset.density === state.densityMode);
     });
 
-    dom.densityHint.textContent = state.densityMode === 'auto'
-      ? '현재 ' + getDensityLabel(state.resolvedDensityKey)
-      : getDensityLabel(state.resolvedDensityKey) + ' 고정';
+    if (dom.densityHint) {
+      dom.densityHint.textContent = state.densityMode === 'auto'
+        ? '현재 ' + getDensityLabel(state.resolvedDensityKey)
+        : getDensityLabel(state.resolvedDensityKey) + ' 고정';
+    }
   }
 
   function renderDay() {
@@ -559,7 +563,7 @@
   }
 
   function renderBookmarks() {
-    renderBookmarksDownloadState();
+    renderBookmarkActionState();
 
     if (state.bookmarks.size === 0) {
       dom.bookmarksList.innerHTML = '<div class="bp-empty">관심 목록이 비어 있어요.<br>오른쪽 별 아이콘으로<br>추가해 보세요.</div>';
@@ -610,7 +614,7 @@
   function updateBookmarkCount() {
     dom.bookmarkCount.textContent = state.bookmarks.size > 0 ? '(' + state.bookmarks.size + ')' : '';
     dom.bookmarkBtn.classList.toggle('has-items', state.bookmarks.size > 0);
-    renderBookmarksDownloadState();
+    renderBookmarkActionState();
 
     if (state.bookmarks.size === 0 && state.bookmarkHighlight) {
       state.bookmarkHighlight = false;
@@ -629,6 +633,17 @@
 
   function removeBookmark(code) {
     state.bookmarks.delete(code);
+    persistBookmarks();
+    renderBookmarks();
+    updateBookmarkCount();
+    renderDay();
+  }
+
+  function clearAllBookmarks() {
+    if (state.bookmarks.size === 0) return;
+    if (!window.confirm('관심 목록을 모두 비울까요?')) return;
+
+    state.bookmarks.clear();
     persistBookmarks();
     renderBookmarks();
     updateBookmarkCount();
@@ -1353,8 +1368,11 @@
       .filter(Boolean);
   }
 
-  function renderBookmarksDownloadState() {
-    dom.bookmarksDownloadBtn.disabled = state.bookmarks.size === 0;
+  function renderBookmarkActionState() {
+    const isEmpty = state.bookmarks.size === 0;
+
+    dom.bookmarksClearBtn.disabled = isEmpty;
+    dom.bookmarksDownloadBtn.disabled = isEmpty;
   }
 
   function normalizeSearchValue(value) {

@@ -63,7 +63,7 @@ window.JIFF_SCHEDULE_CONFIG = Object.freeze({
   ],
   densityModes: [
     { id: 'auto', label: '자동' },
-    { id: 'compact', label: '콤팩트' },
+    { id: 'compact', label: '좁게' },
     { id: 'default', label: '기본' },
     { id: 'wide', label: '넓게' },
   ],

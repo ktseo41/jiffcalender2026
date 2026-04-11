@@ -662,30 +662,53 @@ body {
   padding: 16px;
   border-bottom: 1px solid var(--border);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
 }
-.bp-header h3 { font-size: var(--font-tooltip-title); color: var(--accent); font-family: 'Nanum Myeongjo', serif; }
+.bp-header h3 {
+  font-size: var(--font-tooltip-title);
+  color: var(--accent);
+  font-family: 'Nanum Myeongjo', serif;
+  white-space: nowrap;
+}
 .bp-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
+.bp-clear,
 .bp-download {
   padding: 5px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(200,168,75,0.28);
-  background: rgba(200,168,75,0.08);
-  color: var(--accent);
   font-size: var(--font-tiny);
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
+}
+.bp-download {
+  border: 1px solid rgba(200,168,75,0.28);
+  background: rgba(200,168,75,0.08);
+  color: var(--accent);
 }
 .bp-download:hover {
   border-color: rgba(200,168,75,0.5);
   background: rgba(200,168,75,0.14);
 }
+.bp-clear {
+  border: 1px solid rgba(224,92,122,0.24);
+  background: rgba(224,92,122,0.08);
+  color: #f0a9b8;
+}
+.bp-clear:hover {
+  border-color: rgba(224,92,122,0.45);
+  background: rgba(224,92,122,0.14);
+  color: #ffd0d8;
+}
+.bp-clear:disabled,
 .bp-download:disabled {
   opacity: 0.45;
   cursor: default;
@@ -704,9 +727,13 @@ body {
 }
 .bm-color { width: 4px; border-radius: 2px; flex-shrink: 0; align-self: stretch; }
 .bm-info { flex: 1; }
-.bm-day-heading { font-size: var(--font-tiny); color: var(--accent); font-weight: 700; padding: 8px 4px 4px; letter-spacing: 0.05em; }
+.bm-day-heading { font-size: calc(var(--font-tiny) * 1.2); color: var(--accent); font-weight: 700; padding: 8px 4px 4px; letter-spacing: 0.05em; }
 .bm-title { font-size: var(--font-bookmark-title); font-weight: 600; color: var(--text); margin-bottom: 2px; }
-.bm-meta { font-size: var(--font-tiny); color: var(--text-dim); }
+.bm-meta {
+  font-size: calc(var(--font-tiny) * 1.2);
+  color: var(--text-dim);
+  line-height: 1.55;
+}
 .bm-remove { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--font-bookmark-title); flex-shrink: 0; }
 .bm-remove:hover { color: #e05; }
 .bp-empty { text-align: center; color: var(--text-faint); font-size: var(--font-body); padding: 40px 20px; line-height: 1.8; }
