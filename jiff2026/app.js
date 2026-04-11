@@ -3,6 +3,7 @@
   const config = window.JIFF_SCHEDULE_CONFIG;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
   const DAY_QUERY_PARAM = 'day';
+  const MOBILE_NOTICE_STORAGE_KEY = 'jiff2026-mobile-notice-dismissed';
   const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
 
   if (!dataSource || !config) {
@@ -22,6 +23,7 @@
     bookmarkHighlight: false,
     densityMode: config.defaultState.densityMode,
     resolvedDensityKey: null,
+    mobileNoticeDismissed: readMobileNoticeDismissed(),
     mouseX: 0,
     mouseY: 0,
   };
@@ -62,6 +64,8 @@
     dom.timelineScroll = document.getElementById('timeline-scroll');
     dom.timeAxis = document.getElementById('time-axis');
     dom.timelineContent = document.getElementById('timeline-content');
+    dom.mobileNotice = document.getElementById('mobile-notice');
+    dom.mobileNoticeCloseBtn = document.getElementById('mobileNoticeCloseBtn');
     dom.tooltip = document.getElementById('tooltip');
     dom.overlay = document.getElementById('overlay');
     dom.detailChooserPanel = document.getElementById('detail-chooser-panel');
@@ -89,6 +93,7 @@
     dom.bookmarksClearBtn.addEventListener('click', clearAllBookmarks);
     dom.bookmarksDownloadBtn.addEventListener('click', downloadBookmarksCSV);
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
+    dom.mobileNoticeCloseBtn.addEventListener('click', dismissMobileNotice);
     dom.detailChooserCloseBtn.addEventListener('click', closeDetailChooser);
     dom.overlay.addEventListener('click', closeOpenPanels);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
@@ -102,6 +107,7 @@
     buildVenueFilters();
     buildLegend();
     buildDensityControls();
+    renderMobileNotice();
   }
 
   function buildDayTabs() {
@@ -209,6 +215,8 @@
   }
 
   function handleWindowResize() {
+    renderMobileNotice();
+
     if (state.densityMode !== 'auto') return;
 
     const nextDensityKey = getResolvedDensityKey();
@@ -288,6 +296,23 @@
         ? '현재 ' + getDensityLabel(state.resolvedDensityKey)
         : getDensityLabel(state.resolvedDensityKey) + ' 고정';
     }
+  }
+
+  function renderMobileNotice() {
+    if (!dom.mobileNotice) return;
+
+    const shouldShow = !state.mobileNoticeDismissed && isMobileViewport();
+
+    dom.mobileNotice.classList.toggle('visible', shouldShow);
+    dom.mobileNotice.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
+  }
+
+  function dismissMobileNotice() {
+    if (state.mobileNoticeDismissed) return;
+
+    state.mobileNoticeDismissed = true;
+    writeMobileNoticeDismissed(true);
+    renderMobileNotice();
   }
 
   function renderDay() {
@@ -1046,6 +1071,36 @@
       window.localStorage.setItem(BOOKMARK_STORAGE_KEY, JSON.stringify(uniqueValues(codes)));
     } catch (error) {
       // Ignore storage failures so the app still works in restrictive contexts.
+    }
+  }
+
+  function isMobileViewport() {
+    if (!window.matchMedia) return window.innerWidth <= 960;
+
+    const touchNarrow = window.matchMedia('(max-width: 960px) and (pointer: coarse)').matches;
+    const compactViewport = window.matchMedia('(max-width: 760px)').matches;
+
+    return touchNarrow || compactViewport;
+  }
+
+  function readMobileNoticeDismissed() {
+    try {
+      return window.sessionStorage.getItem(MOBILE_NOTICE_STORAGE_KEY) === '1';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function writeMobileNoticeDismissed(value) {
+    try {
+      if (!value) {
+        window.sessionStorage.removeItem(MOBILE_NOTICE_STORAGE_KEY);
+        return;
+      }
+
+      window.sessionStorage.setItem(MOBILE_NOTICE_STORAGE_KEY, '1');
+    } catch (error) {
+      // Ignore storage failures so the notice still works without persistence.
     }
   }
 
