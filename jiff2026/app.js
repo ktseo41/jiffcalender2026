@@ -1313,10 +1313,6 @@
   function getScheduleMetaEntry(row, directorSource) {
     if (!directorSource) return null;
 
-    if (directorSource.byCode && directorSource.byCode[row.code]) {
-      return directorSource.byCode[row.code];
-    }
-
     const candidates = getDirectorLookupCandidates(row);
     const matches = candidates
       .map(candidate => directorSource.byTitle && directorSource.byTitle[candidate]
@@ -1325,10 +1321,19 @@
           ? directorSource.byNormalizedTitle[normalizeSearchValue(candidate)]
           : null)
       .filter(Boolean);
+    const codeMatch = directorSource.byCode && directorSource.byCode[row.code]
+      ? directorSource.byCode[row.code]
+      : null;
 
-    if (matches.length === 0) return null;
+    if (codeMatch && codeEntryMatchesRowTitle(codeMatch, candidates)) {
+      return codeMatch;
+    }
 
-    return mergeScheduleMetaEntries(matches);
+    if (matches.length > 0) {
+      return mergeScheduleMetaEntries(matches);
+    }
+
+    return codeMatch;
   }
 
   function getDirectorLookupCandidates(row) {
@@ -1347,6 +1352,14 @@
     }
 
     return uniqueValues(candidates.filter(Boolean));
+  }
+
+  function codeEntryMatchesRowTitle(entry, candidates) {
+    if (!entry || !Array.isArray(entry.titles) || entry.titles.length === 0) return false;
+
+    const normalizedTitles = new Set(entry.titles.map(title => normalizeSearchValue(title)));
+
+    return candidates.some(candidate => normalizedTitles.has(normalizeSearchValue(candidate)));
   }
 
   function mergeScheduleMetaEntries(entries) {
