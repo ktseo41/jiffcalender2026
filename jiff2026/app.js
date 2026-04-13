@@ -400,6 +400,11 @@
 
     films.forEach(film => {
       row.appendChild(createFilmBlock(film, timelineEnd));
+
+      const eventBlock = createLinkedProgramEventBlock(film, timelineEnd);
+      if (eventBlock) {
+        row.appendChild(eventBlock);
+      }
     });
 
     return row;
@@ -483,6 +488,77 @@
     title.textContent = titleText;
 
     return title;
+  }
+
+  function createLinkedProgramEventBlock(film, timelineEnd) {
+    const relatedEvent = getFollowUpProgramEvent(film);
+    const filmEndMinutes = getFilmEndMinutes(film);
+    const eventEndMinutes = getProgramEventEndMinutes(film);
+
+    if (!relatedEvent || filmEndMinutes === null || eventEndMinutes === null || filmEndMinutes > timelineEnd) {
+      return null;
+    }
+
+    const x = timeToX(filmEndMinutes);
+    const width = Math.max(4, timeToX(Math.min(eventEndMinutes, timelineEnd)) - x);
+    const color = getSectionColor(film.section);
+    const isBookmarked = state.bookmarks.has(film.code);
+    const isSearchMatch = filmMatchesSearch(film);
+    const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
+    const block = document.createElement('div');
+
+    block.className = 'program-event-block';
+    block.style.left = x + 'px';
+    block.style.width = width + 'px';
+    block.style.background = getProgramEventBackground(color, isSearchMatch, isDimmed);
+    block.style.borderColor = getProgramEventBorderColor(color, isSearchMatch, isDimmed);
+    block.style.opacity = isDimmed ? '0.15' : '1';
+    block.style.boxShadow = getProgramEventShadow(isSearchMatch);
+
+    const eventLink = relatedEvent.url ? createProgramEventLink(film, relatedEvent) : null;
+
+    if (eventLink) {
+      block.appendChild(eventLink);
+    }
+
+    if (width > 28) {
+      (eventLink || block).appendChild(createProgramEventText(formatProgramEventLabel(relatedEvent)));
+    }
+
+    block.addEventListener('mouseenter', () => showProgramEventTooltip(film, relatedEvent, color));
+    block.addEventListener('mousemove', moveTooltip);
+    block.addEventListener('mouseleave', hideTooltip);
+
+    return block;
+  }
+
+  function createProgramEventLink(film, relatedEvent) {
+    const link = document.createElement('a');
+
+    link.className = 'program-event-link';
+    link.href = relatedEvent.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', film.title + ' 관련 ' + relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
+    link.setAttribute('title', relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
+    link.addEventListener('click', event => {
+      event.stopPropagation();
+    });
+
+    return link;
+  }
+
+  function createProgramEventText(text) {
+    const label = document.createElement('div');
+
+    label.className = 'program-event-text';
+    label.textContent = text;
+
+    return label;
+  }
+
+  function formatProgramEventLabel(relatedEvent) {
+    return relatedEvent.label + ' · ' + relatedEvent.durationMinutes + '분';
   }
 
   function createFilmBookmarkToggle(film, isBookmarked, block) {
@@ -582,6 +658,30 @@
 
     if (state.bookmarkHighlight && isBookmarked) {
       return '0 0 0 2px #ffd70088, 0 2px 8px rgba(0,0,0,0.5)';
+    }
+
+    return '';
+  }
+
+  function getProgramEventBackground(color, isSearchMatch, isDimmed) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return color + '38';
+    }
+
+    return color + (isDimmed ? '10' : '20');
+  }
+
+  function getProgramEventBorderColor(color, isSearchMatch, isDimmed) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '#f0d58a';
+    }
+
+    return color + (isDimmed ? '55' : 'd8');
+  }
+
+  function getProgramEventShadow(isSearchMatch) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '0 0 0 1px rgba(240,213,138,0.5)';
     }
 
     return '';
@@ -814,6 +914,19 @@
       parts.push('<div class="tt-shorts">📽 ' + escapeHtml(film.shorts) + '</div>');
     }
 
+    if (film.relatedEvent) {
+      const relatedEvent = film.relatedEvent;
+      const relatedEventLabel = relatedEvent.label + ' · ' + relatedEvent.durationMinutes + '분';
+
+      parts.push('<div class="tt-shorts">🗣 ' + escapeHtml(relatedEventLabel));
+      if (relatedEvent.scheduleMode === 'separate') {
+        parts.push(' · ' + escapeHtml(relatedEvent.separateDate + ' ' + relatedEvent.separateStartTime + ' ' + relatedEvent.separateVenue));
+      } else {
+        parts.push(' · 상영 후 진행');
+      }
+      parts.push('</div>');
+    }
+
     parts.push('<div class="tt-tags">');
     if (film.meta && film.meta.includes('GV')) {
       parts.push('<span class="tt-tag gv">GV</span>');
@@ -830,8 +943,37 @@
       : film.hasMultipleDetails
         ? ' · 블록 클릭 시 상영작 목록 열기'
         : '';
+    const eventHint = film.relatedEvent && film.relatedEvent.url
+      ? film.relatedEvent.scheduleMode === 'separate'
+        ? ' · 관련 행사 일정은 툴팁 참고'
+        : ' · 점선 블록 클릭 시 이벤트 페이지 열기'
+      : '';
 
-    parts.push('<div class="tt-bookmark-hint">' + bookmarkHint + detailHint + '</div>');
+    parts.push('<div class="tt-bookmark-hint">' + bookmarkHint + detailHint + eventHint + '</div>');
+
+    dom.tooltip.innerHTML = parts.join('');
+    dom.tooltip.classList.add('visible');
+    positionTooltip();
+  }
+
+  function showProgramEventTooltip(film, relatedEvent, color) {
+    const parts = [];
+
+    parts.push('<div class="tt-section" style="color:' + color + '">연결 행사</div>');
+    parts.push('<div class="tt-title">' + escapeHtml(relatedEvent.label) + '</div>');
+    parts.push('<div class="tt-meta">');
+    parts.push('<strong>연결 상영</strong> ' + escapeHtml(film.title) + '<br>');
+
+    if (relatedEvent.scheduleMode === 'separate') {
+      parts.push('<strong>일정</strong> ' + escapeHtml(relatedEvent.separateDate + ' ' + relatedEvent.separateStartTime) + '<br>');
+      parts.push('<strong>장소</strong> ' + escapeHtml(relatedEvent.separateVenue));
+    } else {
+      parts.push('<strong>진행</strong> 상영 후 ' + escapeHtml(String(relatedEvent.durationMinutes)) + '분<br>');
+      parts.push('<strong>시작</strong> ' + escapeHtml(film.endTime) + ' 이후');
+    }
+
+    parts.push('</div>');
+    parts.push('<div class="tt-bookmark-hint">클릭 시 공식 이벤트 페이지 새 탭 열기</div>');
 
     dom.tooltip.innerHTML = parts.join('');
     dom.tooltip.classList.add('visible');
@@ -1182,6 +1324,8 @@
       film.shorts,
       film.section,
       film.code,
+      film.relatedEvent ? film.relatedEvent.label : '',
+      film.relatedEvent ? film.relatedEvent.searchText : '',
     ].filter(Boolean).join(' '));
 
     return haystack.includes(state.normalizedSearchQuery);
@@ -1218,7 +1362,9 @@
   function getTimelineEnd(dayData) {
     const latestEnd = dayData.reduce((maxEnd, film) => {
       const filmEnd = getFilmEndMinutes(film);
-      return filmEnd === null ? maxEnd : Math.max(maxEnd, filmEnd);
+      const programEventEnd = getProgramEventEndMinutes(film);
+      const latestFilmEnd = filmEnd === null ? maxEnd : Math.max(maxEnd, filmEnd);
+      return programEventEnd === null ? latestFilmEnd : Math.max(latestFilmEnd, programEventEnd);
     }, config.timeRange.end);
 
     return Math.max(config.timeRange.end, Math.ceil(latestEnd / 30) * 30);
@@ -1247,6 +1393,23 @@
     return endMinutes <= startMinutes
       ? endMinutes + (24 * 60)
       : endMinutes;
+  }
+
+  function getFollowUpProgramEvent(film) {
+    if (!film || !film.relatedEvent || film.relatedEvent.scheduleMode === 'separate') {
+      return null;
+    }
+
+    return film.relatedEvent;
+  }
+
+  function getProgramEventEndMinutes(film) {
+    const relatedEvent = getFollowUpProgramEvent(film);
+    const filmEnd = getFilmEndMinutes(film);
+
+    if (!relatedEvent || filmEnd === null) return null;
+
+    return filmEnd + relatedEvent.durationMinutes;
   }
 
   function formatAxisTime(totalMinutes) {
@@ -1291,14 +1454,21 @@
   function enrichRows(rows) {
     const directorSource = window.JIFF_SCHEDULE_DIRECTORS;
 
-    if (!directorSource) return rows;
-
     return rows.map(row => {
-      const metaEntry = getScheduleMetaEntry(row, directorSource);
+      const enrichedRow = Object.assign({}, row);
+      const linkedEvent = getLinkedProgramEvent(row);
 
-      if (!metaEntry) return row;
+      if (linkedEvent) {
+        enrichedRow.relatedEvent = linkedEvent;
+      }
 
-      return Object.assign({}, row, {
+      if (!directorSource) return enrichedRow;
+
+      const metaEntry = getScheduleMetaEntry(enrichedRow, directorSource);
+
+      if (!metaEntry) return enrichedRow;
+
+      return Object.assign(enrichedRow, {
         directorLabel: metaEntry.directorLabel || '',
         directorNames: metaEntry.directorNames || [],
         directorSearchText: (metaEntry.directorNames || []).join(' '),
@@ -1308,6 +1478,11 @@
         hasMultipleDetails: Boolean(metaEntry.hasMultipleDetails),
       });
     });
+  }
+
+  function getLinkedProgramEvent(row) {
+    if (!row || !row.code || !config.linkedProgramEventsByCode) return null;
+    return config.linkedProgramEventsByCode[row.code] || null;
   }
 
   function getScheduleMetaEntry(row, directorSource) {

@@ -540,7 +540,44 @@ body {
   transition: opacity 0.12s ease;
   z-index: 0;
 }
+.program-event-block {
+  position: absolute;
+  top: 8px;
+  height: calc(var(--row-h) - 16px);
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  padding: 0 6px;
+  border: 1px dashed rgba(255,255,255,0.35);
+  z-index: 2;
+  min-width: 4px;
+  isolation: isolate;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.program-event-block::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255,255,255,0.08);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 0;
+}
 .film-block-link {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 6px;
+  color: inherit;
+  text-decoration: none;
+  z-index: 1;
+}
+.program-event-link {
   position: absolute;
   inset: 0;
   display: flex;
@@ -558,6 +595,10 @@ body {
   outline: 1px solid rgba(255,255,255,0.9);
   outline-offset: -2px;
 }
+.program-event-link:focus-visible {
+  outline: 1px dashed rgba(255,255,255,0.92);
+  outline-offset: -2px;
+}
 .film-block.no-detail-action {
   cursor: default;
 }
@@ -568,6 +609,12 @@ body {
   z-index: 100;
 }
 .film-block:hover::after {
+  opacity: 1;
+}
+.program-event-block:hover {
+  z-index: 95;
+}
+.program-event-block:hover::after {
   opacity: 1;
 }
 .film-block.bookmark-hovering:hover {
@@ -584,6 +631,20 @@ body {
   text-overflow: ellipsis;
   color: rgba(255,255,255,0.92);
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  pointer-events: none;
+  flex: 1;
+  position: relative;
+  z-index: 1;
+}
+.program-event-text {
+  font-size: var(--font-tiny);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  color: rgba(255,255,255,0.88);
+  text-shadow: 0 1px 1px rgba(0,0,0,0.35);
   pointer-events: none;
   flex: 1;
   position: relative;
