@@ -4,6 +4,7 @@
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
   const DAY_QUERY_PARAM = 'day';
   const MOBILE_NOTICE_STORAGE_KEY = 'jiff2026-mobile-notice-dismissed';
+  const LAYOUT_MODE_STORAGE_KEY = 'jiff2026-layout-mode';
   const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
 
   if (!dataSource || !config) {
@@ -23,7 +24,9 @@
     bookmarkHighlight: false,
     densityMode: config.defaultState.densityMode,
     resolvedDensityKey: null,
+    compactViewport: false,
     mobileLayout: false,
+    desktopViewForced: readDesktopViewForced(),
     mobileHeaderSearchOpen: false,
     mobileControlsOpen: false,
     mobileVenueColumns: [],
@@ -67,6 +70,7 @@
     dom.mobileHeaderSearch = document.getElementById('mobileHeaderSearch');
     dom.mobileSearchInput = document.getElementById('mobileSearchInput');
     dom.mobileSearchClearBtn = document.getElementById('mobileSearchClearBtn');
+    dom.mobileDesktopToggleBtn = document.getElementById('mobileDesktopToggleBtn');
     dom.mobileSearchToggleBtn = document.getElementById('mobileSearchToggleBtn');
     dom.mobileControlsToggleBtn = document.getElementById('mobileControlsToggleBtn');
     dom.bookmarkBtn = document.getElementById('bookmarkBtn');
@@ -106,6 +110,7 @@
     dom.searchClearBtn.addEventListener('click', clearSearch);
     dom.mobileSearchInput.addEventListener('input', handleMobileSearchInput);
     dom.mobileSearchClearBtn.addEventListener('click', handleMobileSearchClearClick);
+    dom.mobileDesktopToggleBtn.addEventListener('click', toggleDesktopViewMode);
     dom.mobileSearchToggleBtn.addEventListener('click', openMobileHeaderSearch);
     dom.mobileControlsToggleBtn.addEventListener('click', toggleMobileControls);
     dom.densitySelector.addEventListener('click', handleDensityClick);
@@ -132,16 +137,20 @@
     buildDensityControls();
     renderMobileNotice();
     renderMobileControlsState();
+    renderViewportToggle();
     updateDayTabOverflowHints();
   }
 
   function syncViewportMode() {
-    const nextMobileLayout = isMobileViewport();
-    const hasChanged = nextMobileLayout !== state.mobileLayout;
+    const nextCompactViewport = isMobileViewport();
+    const nextMobileLayout = nextCompactViewport && !state.desktopViewForced;
+    const hasChanged = nextCompactViewport !== state.compactViewport || nextMobileLayout !== state.mobileLayout;
 
+    state.compactViewport = nextCompactViewport;
     state.mobileLayout = nextMobileLayout;
-    state.mobileHeaderSearchOpen = nextMobileLayout ? hasSearchQuery() : false;
+    state.mobileHeaderSearchOpen = nextCompactViewport ? (hasSearchQuery() || state.mobileHeaderSearchOpen) : false;
     state.mobileControlsOpen = false;
+    document.body.classList.toggle('compact-viewport', nextCompactViewport);
     document.body.classList.toggle('mobile-layout', nextMobileLayout);
 
     return hasChanged;
@@ -268,6 +277,7 @@
     const layoutChanged = syncViewportMode();
 
     renderMobileNotice();
+    renderViewportToggle();
     updateDayTabOverflowHints();
 
     if (layoutChanged) {
@@ -320,6 +330,7 @@
     renderDensityControls();
     renderBookmarkHighlightState();
     renderMobileControlsState();
+    renderViewportToggle();
   }
 
   function renderDayTabState() {
@@ -367,7 +378,7 @@
   }
 
   function renderMobileControlsState() {
-    const isOpen = state.mobileLayout && state.mobileControlsOpen;
+    const isOpen = state.compactViewport && state.mobileControlsOpen;
 
     dom.controls.classList.toggle('mobile-open', isOpen);
     dom.mobileControlsToggleBtn.classList.toggle('is-active', isOpen);
@@ -376,7 +387,7 @@
   }
 
   function renderSearchControls() {
-    const isMobileSearchVisible = state.mobileLayout && (state.mobileHeaderSearchOpen || hasSearchQuery());
+    const isMobileSearchVisible = state.compactViewport && (state.mobileHeaderSearchOpen || hasSearchQuery());
 
     if (dom.searchInput.value !== state.searchQuery) {
       dom.searchInput.value = state.searchQuery;
@@ -394,6 +405,17 @@
     dom.mobileSearchClearBtn.setAttribute('aria-label', hasSearchQuery() ? '검색 지우기' : '검색 닫기');
   }
 
+  function renderViewportToggle() {
+    const shouldShow = state.compactViewport;
+    const isDesktopMode = shouldShow && !state.mobileLayout;
+
+    dom.mobileDesktopToggleBtn.hidden = !shouldShow;
+    dom.mobileDesktopToggleBtn.classList.toggle('is-active', isDesktopMode);
+    dom.mobileDesktopToggleBtn.textContent = isDesktopMode ? 'MO' : 'PC';
+    dom.mobileDesktopToggleBtn.setAttribute('aria-label', isDesktopMode ? '모바일 보기로 전환' : 'PC 보기로 전환');
+    dom.mobileDesktopToggleBtn.setAttribute('title', isDesktopMode ? '모바일 보기' : 'PC 보기');
+  }
+
   function renderDensityControls() {
     dom.densitySelector.querySelectorAll('[data-density]').forEach(button => {
       button.classList.toggle('active', button.dataset.density === state.densityMode);
@@ -409,7 +431,18 @@
   function renderMobileNotice() {
     if (!dom.mobileNotice) return;
 
-    const shouldShow = !state.mobileNoticeDismissed && state.mobileLayout;
+    const hasOpenPanel = state.mobileControlsOpen
+      || dom.bookmarksPanel.classList.contains('open')
+      || dom.detailChooserPanel.classList.contains('open');
+    const hasActiveFilter = state.bookmarkHighlight
+      || Boolean(state.activeSections)
+      || hasSearchQuery()
+      || state.activeGroups.size !== config.venueGroups.length;
+    const shouldShow = !state.mobileNoticeDismissed
+      && state.mobileLayout
+      && !hasOpenPanel
+      && !hasActiveFilter
+      && state.currentDay === config.defaultState.currentDay;
 
     dom.mobileNotice.classList.toggle('visible', shouldShow);
     dom.mobileNotice.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
@@ -793,6 +826,26 @@
     return color + (isDimmed ? '55' : 'd8');
   }
 
+  function getMobileFilmBackground(color, isBookmarked, isSearchMatch, isDimmed) {
+    if (!isDimmed) return getFilmBackground(color, isBookmarked, isSearchMatch, false);
+    return color + '52';
+  }
+
+  function getMobileFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed) {
+    if (!isDimmed) return getFilmBorderColor(color, isBookmarked, isSearchMatch, false);
+    return color + '88';
+  }
+
+  function getMobileProgramEventBackground(color, isSearchMatch, isDimmed) {
+    if (!isDimmed) return getProgramEventBackground(color, isSearchMatch, false);
+    return color + '24';
+  }
+
+  function getMobileProgramEventBorderColor(color, isSearchMatch, isDimmed) {
+    if (!isDimmed) return getProgramEventBorderColor(color, isSearchMatch, false);
+    return color + '80';
+  }
+
   function getProgramEventShadow(isSearchMatch) {
     if (hasSearchQuery() && isSearchMatch) {
       return '0 0 0 1px rgba(240,213,138,0.5)';
@@ -891,7 +944,7 @@
 
   function clearSearch() {
     setSearchQuery('');
-    if (state.mobileLayout && state.mobileHeaderSearchOpen) {
+    if (state.compactViewport && state.mobileHeaderSearchOpen) {
       dom.mobileSearchInput.focus();
       return;
     }
@@ -900,7 +953,7 @@
   }
 
   function openMobileHeaderSearch() {
-    if (!state.mobileLayout) {
+    if (!state.compactViewport) {
       dom.searchInput.focus();
       return;
     }
@@ -924,7 +977,7 @@
   }
 
   function toggleMobileControls() {
-    if (!state.mobileLayout) return;
+    if (!state.compactViewport) return;
 
     if (state.mobileControlsOpen) {
       closeMobileControls();
@@ -935,7 +988,7 @@
   }
 
   function openMobileControls() {
-    if (!state.mobileLayout) return;
+    if (!state.compactViewport) return;
 
     closeBookmarksPanel();
     closeDetailChooser();
@@ -1049,10 +1102,12 @@
   }
 
   function syncOverlayState() {
-    const hasOpenPanel = (state.mobileLayout && state.mobileControlsOpen)
+    const hasOpenPanel = (state.compactViewport && state.mobileControlsOpen)
       || dom.bookmarksPanel.classList.contains('open')
       || dom.detailChooserPanel.classList.contains('open');
     dom.overlay.classList.toggle('open', hasOpenPanel);
+    document.body.classList.toggle('has-mobile-panel-open', hasOpenPanel);
+    renderMobileNotice();
   }
 
   function renderDetailChooser(film) {
@@ -1074,7 +1129,7 @@
   }
 
   function showTooltip(film, color) {
-    if (state.mobileLayout) return;
+    if (state.compactViewport) return;
 
     const tags = getMetaTags(film.meta);
     const parts = [];
@@ -1137,7 +1192,7 @@
   }
 
   function showProgramEventTooltip(film, relatedEvent, color) {
-    if (state.mobileLayout) return;
+    if (state.compactViewport) return;
 
     const parts = [];
 
@@ -1163,7 +1218,7 @@
   }
 
   function moveTooltip() {
-    if (state.mobileLayout) return;
+    if (state.compactViewport) return;
     positionTooltip();
   }
 
@@ -1345,7 +1400,7 @@
     state.searchQuery = query;
     state.normalizedSearchQuery = normalizeSearchValue(query);
 
-    if (state.mobileLayout) {
+    if (state.compactViewport) {
       state.mobileHeaderSearchOpen = hasSearchQuery() || state.mobileHeaderSearchOpen;
     }
 
@@ -1372,7 +1427,7 @@
 
   function renderMobileDay(dayData) {
     const filmsInActiveGroups = dayData.filter(isFilmInActiveGroup);
-    const visibleFilms = filmsInActiveGroups.filter(matchesActiveListFilters);
+    const visibleFilms = filmsInActiveGroups.filter(matchesMobileVisibleFilters);
     const timelineSource = filmsInActiveGroups.length > 0 ? filmsInActiveGroups : dayData;
     const timelineEnd = getTimelineEnd(timelineSource);
     const venueColumns = getMobileVenueColumns(timelineSource);
@@ -1554,18 +1609,23 @@
     const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
     const color = getSectionColor(film.section);
     const isBookmarked = state.bookmarks.has(film.code);
+    const isSearchMatch = filmMatchesSearch(film);
+    const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
     const hasBlockAction = Boolean(film.detailUrl || film.hasMultipleDetails);
     const block = document.createElement('div');
     const detailLink = film.detailUrl ? createMobileFilmDetailLink(film) : null;
 
-    block.className = 'mobile-film-block' + (isBookmarked ? ' bookmarked' : '') + (hasBlockAction ? '' : ' no-detail-action');
+    block.className = 'mobile-film-block'
+      + (isBookmarked ? ' bookmarked' : '')
+      + (isDimmed ? ' is-dimmed' : '')
+      + (hasBlockAction ? '' : ' no-detail-action');
     block.style.left = x + 4 + 'px';
     block.style.top = y + 4 + 'px';
     block.style.width = Math.max(28, columnWidth - 8) + 'px';
     block.style.height = Math.max(28, height - 8) + 'px';
-    block.style.background = getFilmBackground(color, isBookmarked, filmMatchesSearch(film), false);
-    block.style.borderColor = getFilmBorderColor(color, isBookmarked, filmMatchesSearch(film), false);
-    block.style.boxShadow = getFilmShadow(isBookmarked, filmMatchesSearch(film));
+    block.style.background = getMobileFilmBackground(color, isBookmarked, isSearchMatch, isDimmed);
+    block.style.borderColor = getMobileFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed);
+    block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
 
     if (detailLink) {
       block.appendChild(detailLink);
@@ -1646,17 +1706,19 @@
     const y = mobileTimeToY(filmEndMinutes);
     const height = Math.max(20, mobileTimeToY(Math.min(eventEndMinutes, timelineEnd)) - y);
     const color = getSectionColor(film.section);
+    const isSearchMatch = filmMatchesSearch(film);
+    const isDimmed = shouldDimFilm(film, state.bookmarks.has(film.code), isSearchMatch);
     const block = document.createElement('div');
     const eventLink = relatedEvent.url ? createMobileProgramEventLink(film, relatedEvent) : null;
 
-    block.className = 'mobile-program-event-block';
+    block.className = 'mobile-program-event-block' + (isDimmed ? ' is-dimmed' : '');
     block.style.left = x + 8 + 'px';
     block.style.top = y + 3 + 'px';
     block.style.width = Math.max(20, columnWidth - 16) + 'px';
     block.style.height = Math.max(20, height - 6) + 'px';
-    block.style.background = getProgramEventBackground(color, filmMatchesSearch(film), false);
-    block.style.borderColor = getProgramEventBorderColor(color, filmMatchesSearch(film), false);
-    block.style.boxShadow = getProgramEventShadow(filmMatchesSearch(film));
+    block.style.background = getMobileProgramEventBackground(color, isSearchMatch, isDimmed);
+    block.style.borderColor = getMobileProgramEventBorderColor(color, isSearchMatch, isDimmed);
+    block.style.boxShadow = getProgramEventShadow(isSearchMatch);
 
     if (eventLink) {
       block.appendChild(eventLink);
@@ -1713,6 +1775,12 @@
   function matchesActiveListFilters(film) {
     if (state.bookmarkHighlight && !state.bookmarks.has(film.code)) return false;
     if (state.activeSections && !state.activeSections.has(film.section)) return false;
+    if (hasSearchQuery() && !filmMatchesSearch(film)) return false;
+    return true;
+  }
+
+  function matchesMobileVisibleFilters(film) {
+    if (state.bookmarkHighlight && !state.bookmarks.has(film.code)) return false;
     if (hasSearchQuery() && !filmMatchesSearch(film)) return false;
     return true;
   }
@@ -1823,6 +1891,27 @@
     return touchNarrow || compactViewport;
   }
 
+  function toggleDesktopViewMode() {
+    if (!state.compactViewport) return;
+
+    state.desktopViewForced = !state.desktopViewForced;
+    writeDesktopViewForced(state.desktopViewForced);
+
+    syncViewportMode();
+    hideTooltip();
+    closeOpenPanels();
+
+    if (state.densityMode === 'auto') {
+      applyDensitySettings();
+    }
+
+    renderApp();
+
+    if (!state.mobileLayout) {
+      queueTimelineScroll(50);
+    }
+  }
+
   function readMobileNoticeDismissed() {
     try {
       return window.sessionStorage.getItem(MOBILE_NOTICE_STORAGE_KEY) === '1';
@@ -1841,6 +1930,27 @@
       window.sessionStorage.setItem(MOBILE_NOTICE_STORAGE_KEY, '1');
     } catch (error) {
       // Ignore storage failures so the notice still works without persistence.
+    }
+  }
+
+  function readDesktopViewForced() {
+    try {
+      return window.localStorage.getItem(LAYOUT_MODE_STORAGE_KEY) === 'desktop';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function writeDesktopViewForced(value) {
+    try {
+      if (!value) {
+        window.localStorage.removeItem(LAYOUT_MODE_STORAGE_KEY);
+        return;
+      }
+
+      window.localStorage.setItem(LAYOUT_MODE_STORAGE_KEY, 'desktop');
+    } catch (error) {
+      // Ignore storage failures so the layout mode still works without persistence.
     }
   }
 
