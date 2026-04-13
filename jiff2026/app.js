@@ -522,7 +522,7 @@
     }
 
     if (width > 28) {
-      (eventLink || block).appendChild(createProgramEventText(formatProgramEventLabel(relatedEvent)));
+      (eventLink || block).appendChild(createProgramEventText(relatedEvent.label));
     }
 
     block.addEventListener('mouseenter', () => showProgramEventTooltip(film, relatedEvent, color));
@@ -555,10 +555,6 @@
     label.textContent = text;
 
     return label;
-  }
-
-  function formatProgramEventLabel(relatedEvent) {
-    return relatedEvent.label + ' · ' + relatedEvent.durationMinutes + '분';
   }
 
   function createFilmBookmarkToggle(film, isBookmarked, block) {
