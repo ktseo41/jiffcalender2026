@@ -23,6 +23,10 @@
     bookmarkHighlight: false,
     densityMode: config.defaultState.densityMode,
     resolvedDensityKey: null,
+    mobileLayout: false,
+    mobileHeaderSearchOpen: false,
+    mobileControlsOpen: false,
+    mobileVenueColumns: [],
     mobileNoticeDismissed: readMobileNoticeDismissed(),
     mouseX: 0,
     mouseY: 0,
@@ -32,6 +36,7 @@
   const dayLookup = new Map(config.days.map(day => [day.date, day]));
 
   cacheDom();
+  syncViewportMode();
   bindEvents();
   buildStaticUI();
   applyDensitySettings();
@@ -50,6 +55,8 @@
   };
 
   function cacheDom() {
+    dom.controls = document.getElementById('controls');
+    dom.dayTabsShell = document.getElementById('dayTabsShell');
     dom.dayTabs = document.getElementById('dayTabs');
     dom.venueFilters = document.getElementById('venueFilters');
     dom.legend = document.getElementById('legend');
@@ -57,6 +64,11 @@
     dom.searchClearBtn = document.getElementById('searchClearBtn');
     dom.densitySelector = document.getElementById('densitySelector');
     dom.densityHint = document.getElementById('densityHint');
+    dom.mobileHeaderSearch = document.getElementById('mobileHeaderSearch');
+    dom.mobileSearchInput = document.getElementById('mobileSearchInput');
+    dom.mobileSearchClearBtn = document.getElementById('mobileSearchClearBtn');
+    dom.mobileSearchToggleBtn = document.getElementById('mobileSearchToggleBtn');
+    dom.mobileControlsToggleBtn = document.getElementById('mobileControlsToggleBtn');
     dom.bookmarkBtn = document.getElementById('bookmarkBtn');
     dom.bookmarkCount = document.getElementById('bmCount');
     dom.bookmarkHighlightBtn = document.getElementById('bmHighlightBtn');
@@ -66,6 +78,11 @@
     dom.timelineContent = document.getElementById('timeline-content');
     dom.mobileNotice = document.getElementById('mobile-notice');
     dom.mobileNoticeCloseBtn = document.getElementById('mobileNoticeCloseBtn');
+    dom.mobileTimeLabelScroll = document.getElementById('mobile-time-label-scroll');
+    dom.mobileGridScroll = document.getElementById('mobile-grid-scroll');
+    dom.mobileVenueAxis = document.getElementById('mobile-venue-axis');
+    dom.mobileGridContent = document.getElementById('mobile-grid-content');
+    dom.mobileVenueCurrent = null;
     dom.tooltip = document.getElementById('tooltip');
     dom.overlay = document.getElementById('overlay');
     dom.detailChooserPanel = document.getElementById('detail-chooser-panel');
@@ -82,10 +99,15 @@
 
   function bindEvents() {
     dom.dayTabs.addEventListener('click', handleDayTabClick);
+    dom.dayTabs.addEventListener('scroll', updateDayTabOverflowHints, { passive: true });
     dom.venueFilters.addEventListener('click', handleVenueFilterClick);
     dom.legend.addEventListener('click', handleLegendClick);
     dom.searchInput.addEventListener('input', handleSearchInput);
     dom.searchClearBtn.addEventListener('click', clearSearch);
+    dom.mobileSearchInput.addEventListener('input', handleMobileSearchInput);
+    dom.mobileSearchClearBtn.addEventListener('click', handleMobileSearchClearClick);
+    dom.mobileSearchToggleBtn.addEventListener('click', openMobileHeaderSearch);
+    dom.mobileControlsToggleBtn.addEventListener('click', toggleMobileControls);
     dom.densitySelector.addEventListener('click', handleDensityClick);
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
@@ -97,6 +119,7 @@
     dom.detailChooserCloseBtn.addEventListener('click', closeDetailChooser);
     dom.overlay.addEventListener('click', closeOpenPanels);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
+    dom.mobileGridScroll.addEventListener('scroll', syncMobileTimeLabelScroll);
     document.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('popstate', handlePopState);
     window.addEventListener('resize', handleWindowResize);
@@ -108,6 +131,20 @@
     buildLegend();
     buildDensityControls();
     renderMobileNotice();
+    renderMobileControlsState();
+    updateDayTabOverflowHints();
+  }
+
+  function syncViewportMode() {
+    const nextMobileLayout = isMobileViewport();
+    const hasChanged = nextMobileLayout !== state.mobileLayout;
+
+    state.mobileLayout = nextMobileLayout;
+    state.mobileHeaderSearchOpen = nextMobileLayout ? hasSearchQuery() : false;
+    state.mobileControlsOpen = false;
+    document.body.classList.toggle('mobile-layout', nextMobileLayout);
+
+    return hasChanged;
   }
 
   function buildDayTabs() {
@@ -151,7 +188,7 @@
       item.className = 'legend-item';
       item.dataset.section = section;
       item.title = section + ' 필터';
-      item.innerHTML = '<div class="legend-dot" style="background:' + getSectionColor(section) + '"></div>' + escapeHtml(section);
+      item.innerHTML = '<div class="legend-dot" style="background:' + getSectionColor(section) + '"></div><span class="legend-label">' + escapeHtml(section) + '</span>';
       fragment.appendChild(item);
     });
 
@@ -197,6 +234,10 @@
     setSearchQuery(event.target.value);
   }
 
+  function handleMobileSearchInput(event) {
+    setSearchQuery(event.target.value);
+  }
+
   function handleDensityClick(event) {
     const button = event.target.closest('[data-density]');
     if (!button) return;
@@ -214,8 +255,36 @@
     state.mouseY = event.clientY;
   }
 
+  function handleMobileSearchClearClick() {
+    if (hasSearchQuery()) {
+      clearSearch();
+      return;
+    }
+
+    closeMobileHeaderSearch();
+  }
+
   function handleWindowResize() {
+    const layoutChanged = syncViewportMode();
+
     renderMobileNotice();
+    updateDayTabOverflowHints();
+
+    if (layoutChanged) {
+      hideTooltip();
+      closeOpenPanels();
+
+      if (state.densityMode === 'auto') {
+        applyDensitySettings();
+      }
+
+      renderApp();
+
+      if (!state.mobileLayout) {
+        queueTimelineScroll(50);
+      }
+      return;
+    }
 
     if (state.densityMode !== 'auto') return;
 
@@ -250,6 +319,7 @@
     renderSearchControls();
     renderDensityControls();
     renderBookmarkHighlightState();
+    renderMobileControlsState();
   }
 
   function renderDayTabState() {
@@ -259,31 +329,69 @@
       button.classList.toggle('active', button.dataset.day === state.currentDay);
       button.classList.toggle('has-search-match', searchMatchDates.has(button.dataset.day));
     });
+
+    updateDayTabOverflowHints();
+  }
+
+  function updateDayTabOverflowHints() {
+    if (!dom.dayTabsShell) return;
+
+    const maxScrollLeft = Math.max(0, dom.dayTabs.scrollWidth - dom.dayTabs.clientWidth);
+    const canScrollLeft = dom.dayTabs.scrollLeft > 4;
+    const canScrollRight = dom.dayTabs.scrollLeft < maxScrollLeft - 4;
+
+    dom.dayTabsShell.classList.toggle('can-scroll-left', canScrollLeft);
+    dom.dayTabsShell.classList.toggle('can-scroll-right', canScrollRight);
   }
 
   function renderVenueFilterState() {
     dom.venueFilters.querySelectorAll('[data-group]').forEach(button => {
-      button.classList.toggle('active', state.activeGroups.has(button.dataset.group));
+      const isActive = state.activeGroups.has(button.dataset.group);
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
     });
   }
 
   function renderLegendState() {
     dom.legend.querySelectorAll('[data-section]').forEach(item => {
       const shouldDim = state.activeSections && !state.activeSections.has(item.dataset.section);
+      item.classList.toggle('active', !shouldDim);
       item.classList.toggle('dimmed', Boolean(shouldDim));
+      item.setAttribute('aria-pressed', shouldDim ? 'false' : 'true');
     });
   }
 
   function renderBookmarkHighlightState() {
     dom.bookmarkHighlightBtn.classList.toggle('active', state.bookmarkHighlight);
+    dom.bookmarkHighlightBtn.setAttribute('aria-pressed', state.bookmarkHighlight ? 'true' : 'false');
+  }
+
+  function renderMobileControlsState() {
+    const isOpen = state.mobileLayout && state.mobileControlsOpen;
+
+    dom.controls.classList.toggle('mobile-open', isOpen);
+    dom.mobileControlsToggleBtn.classList.toggle('is-active', isOpen);
+    dom.mobileControlsToggleBtn.setAttribute('aria-label', isOpen ? '필터 닫기' : '필터 열기');
+    dom.mobileControlsToggleBtn.setAttribute('title', isOpen ? '필터 닫기' : '필터');
   }
 
   function renderSearchControls() {
+    const isMobileSearchVisible = state.mobileLayout && (state.mobileHeaderSearchOpen || hasSearchQuery());
+
     if (dom.searchInput.value !== state.searchQuery) {
       dom.searchInput.value = state.searchQuery;
     }
 
+    if (dom.mobileSearchInput.value !== state.searchQuery) {
+      dom.mobileSearchInput.value = state.searchQuery;
+    }
+
     dom.searchClearBtn.classList.toggle('hidden', !hasSearchQuery());
+    dom.mobileHeaderSearch.classList.toggle('is-open', isMobileSearchVisible);
+    dom.mobileSearchToggleBtn.classList.toggle('is-active', isMobileSearchVisible);
+    dom.bookmarkBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
+    dom.bookmarkBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');
+    dom.mobileSearchClearBtn.setAttribute('aria-label', hasSearchQuery() ? '검색 지우기' : '검색 닫기');
   }
 
   function renderDensityControls() {
@@ -301,7 +409,7 @@
   function renderMobileNotice() {
     if (!dom.mobileNotice) return;
 
-    const shouldShow = !state.mobileNoticeDismissed && isMobileViewport();
+    const shouldShow = !state.mobileNoticeDismissed && state.mobileLayout;
 
     dom.mobileNotice.classList.toggle('visible', shouldShow);
     dom.mobileNotice.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
@@ -317,6 +425,16 @@
 
   function renderDay() {
     const dayData = getCurrentDayData();
+
+    if (state.mobileLayout) {
+      renderMobileDay(dayData);
+      return;
+    }
+
+    renderTimelineDay(dayData);
+  }
+
+  function renderTimelineDay(dayData) {
     const timelineEnd = getTimelineEnd(dayData);
     const totalWidth = getTotalWidth(timelineEnd);
     const venuesByGroup = getVenuesForDay(dayData);
@@ -773,7 +891,66 @@
 
   function clearSearch() {
     setSearchQuery('');
+    if (state.mobileLayout && state.mobileHeaderSearchOpen) {
+      dom.mobileSearchInput.focus();
+      return;
+    }
+
     dom.searchInput.focus();
+  }
+
+  function openMobileHeaderSearch() {
+    if (!state.mobileLayout) {
+      dom.searchInput.focus();
+      return;
+    }
+
+    closeMobileControls();
+    state.mobileHeaderSearchOpen = true;
+    renderSearchControls();
+    window.requestAnimationFrame(() => {
+      dom.mobileSearchInput.focus();
+    });
+  }
+
+  function closeMobileHeaderSearch(shouldRestoreFocus = true) {
+    if (!state.mobileHeaderSearchOpen) return;
+
+    state.mobileHeaderSearchOpen = false;
+    renderSearchControls();
+    if (shouldRestoreFocus) {
+      dom.mobileSearchToggleBtn.focus();
+    }
+  }
+
+  function toggleMobileControls() {
+    if (!state.mobileLayout) return;
+
+    if (state.mobileControlsOpen) {
+      closeMobileControls();
+      return;
+    }
+
+    openMobileControls();
+  }
+
+  function openMobileControls() {
+    if (!state.mobileLayout) return;
+
+    closeBookmarksPanel();
+    closeDetailChooser();
+    closeMobileHeaderSearch(false);
+    state.mobileControlsOpen = true;
+    renderMobileControlsState();
+    syncOverlayState();
+  }
+
+  function closeMobileControls() {
+    if (!state.mobileControlsOpen) return;
+
+    state.mobileControlsOpen = false;
+    renderMobileControlsState();
+    syncOverlayState();
   }
 
   function downloadBookmarksCSV() {
@@ -834,6 +1011,7 @@
       return;
     }
 
+    closeMobileControls();
     closeDetailChooser();
     renderBookmarks();
     dom.bookmarksPanel.classList.add('open');
@@ -846,6 +1024,7 @@
   }
 
   function openDetailChooser(film) {
+    closeMobileControls();
     closeBookmarksPanel();
     hideTooltip();
     renderDetailChooser(film);
@@ -864,12 +1043,15 @@
   }
 
   function closeOpenPanels() {
+    closeMobileControls();
     closeBookmarksPanel();
     closeDetailChooser();
   }
 
   function syncOverlayState() {
-    const hasOpenPanel = dom.bookmarksPanel.classList.contains('open') || dom.detailChooserPanel.classList.contains('open');
+    const hasOpenPanel = (state.mobileLayout && state.mobileControlsOpen)
+      || dom.bookmarksPanel.classList.contains('open')
+      || dom.detailChooserPanel.classList.contains('open');
     dom.overlay.classList.toggle('open', hasOpenPanel);
   }
 
@@ -892,6 +1074,8 @@
   }
 
   function showTooltip(film, color) {
+    if (state.mobileLayout) return;
+
     const tags = getMetaTags(film.meta);
     const parts = [];
 
@@ -953,6 +1137,8 @@
   }
 
   function showProgramEventTooltip(film, relatedEvent, color) {
+    if (state.mobileLayout) return;
+
     const parts = [];
 
     parts.push('<div class="tt-section" style="color:' + color + '">연결 행사</div>');
@@ -977,6 +1163,7 @@
   }
 
   function moveTooltip() {
+    if (state.mobileLayout) return;
     positionTooltip();
   }
 
@@ -1010,6 +1197,22 @@
   }
 
   function rerenderDayWithDensity(nextDensityKey) {
+    if (state.mobileLayout) {
+      const scrollLeft = dom.mobileGridScroll.scrollLeft;
+      const scrollTop = dom.mobileGridScroll.scrollTop;
+
+      applyDensitySettings(nextDensityKey);
+      renderControls();
+      renderDay();
+
+      requestAnimationFrame(() => {
+        dom.mobileGridScroll.scrollLeft = scrollLeft;
+        dom.mobileGridScroll.scrollTop = scrollTop;
+        dom.mobileTimeLabelScroll.scrollTop = scrollTop;
+      });
+      return;
+    }
+
     const scrollRatio = dom.timelineScroll.scrollLeft / (dom.timelineScroll.scrollWidth || 1);
 
     applyDensitySettings(nextDensityKey);
@@ -1141,11 +1344,18 @@
   function setSearchQuery(query) {
     state.searchQuery = query;
     state.normalizedSearchQuery = normalizeSearchValue(query);
+
+    if (state.mobileLayout) {
+      state.mobileHeaderSearchOpen = hasSearchQuery() || state.mobileHeaderSearchOpen;
+    }
+
     renderControls();
     renderDay();
   }
 
   function queueTimelineScroll(delay) {
+    if (state.mobileLayout) return;
+
     window.setTimeout(() => {
       dom.timelineScroll.scrollLeft = timeToX(config.timeRange.initialScroll) - 20;
     }, delay);
@@ -1153,6 +1363,398 @@
 
   function syncLabelScroll() {
     dom.venueLabelScroll.scrollTop = dom.timelineScroll.scrollTop;
+  }
+
+  function syncMobileTimeLabelScroll() {
+    dom.mobileTimeLabelScroll.scrollTop = dom.mobileGridScroll.scrollTop;
+    updateMobileVenueContextIndicator();
+  }
+
+  function renderMobileDay(dayData) {
+    const filmsInActiveGroups = dayData.filter(isFilmInActiveGroup);
+    const visibleFilms = filmsInActiveGroups.filter(matchesActiveListFilters);
+    const timelineSource = filmsInActiveGroups.length > 0 ? filmsInActiveGroups : dayData;
+    const timelineEnd = getTimelineEnd(timelineSource);
+    const venueColumns = getMobileVenueColumns(timelineSource);
+    const filmsByVenue = groupFilmsByVenue(visibleFilms);
+    const totalWidth = getMobileGridWidth(venueColumns.length);
+    const totalHeight = getMobileGridHeight(timelineEnd);
+
+    state.mobileVenueColumns = venueColumns;
+    dom.mobileTimeLabelScroll.innerHTML = '';
+    dom.mobileVenueAxis.innerHTML = '';
+    dom.mobileGridContent.innerHTML = '';
+    dom.mobileVenueAxis.style.width = totalWidth + 'px';
+    dom.mobileGridContent.style.width = totalWidth + 'px';
+    dom.mobileGridContent.style.height = totalHeight + 'px';
+
+    renderMobileTimeAxis(timelineEnd, totalHeight);
+    renderMobileVenueAxis(venueColumns);
+    renderMobileGridLines(venueColumns.length, timelineEnd, totalWidth, totalHeight);
+
+    venueColumns.forEach((entry, index) => {
+      const films = filmsByVenue.get(entry.venue) || [];
+
+      films.forEach(film => {
+        const block = createMobileFilmBlock(film, index, timelineEnd);
+        if (block) dom.mobileGridContent.appendChild(block);
+
+        const eventBlock = createMobileLinkedProgramEventBlock(film, index, timelineEnd);
+        if (eventBlock) dom.mobileGridContent.appendChild(eventBlock);
+      });
+    });
+
+    if (visibleFilms.length === 0) {
+      renderMobileEmptyState(totalWidth, totalHeight);
+    }
+
+    syncMobileTimeLabelScroll();
+  }
+
+  function renderMobileTimeAxis(timelineEnd, totalHeight) {
+    const rail = document.createElement('div');
+
+    rail.className = 'mobile-time-rail';
+    rail.style.height = totalHeight + 'px';
+
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
+      const mark = document.createElement('div');
+      const isHour = minutes % 60 === 0;
+
+      mark.className = 'mobile-time-mark' + (isHour ? ' full-hour' : '');
+      mark.style.top = mobileTimeToY(minutes) + 'px';
+      mark.textContent = formatAxisTime(minutes);
+      rail.appendChild(mark);
+    }
+
+    dom.mobileTimeLabelScroll.appendChild(rail);
+  }
+
+  function renderMobileVenueAxis(venueColumns) {
+    const columnWidth = getMobileVenueColumnWidth();
+    const groups = [];
+    let activeGroup = null;
+    const current = document.createElement('div');
+
+    current.className = 'mobile-venue-current';
+    dom.mobileVenueCurrent = current;
+    dom.mobileVenueAxis.appendChild(current);
+
+    venueColumns.forEach((entry, index) => {
+      const parts = getMobileVenueHeaderParts(entry.venue);
+
+      if (!activeGroup || activeGroup.label !== parts.primary) {
+        activeGroup = {
+          label: parts.primary,
+          startIndex: index,
+          count: 1,
+        };
+        groups.push(activeGroup);
+      } else {
+        activeGroup.count += 1;
+      }
+    });
+
+    groups.forEach(group => {
+      const groupHead = document.createElement('div');
+
+      groupHead.className = 'mobile-venue-grouphead';
+      groupHead.style.left = String(group.startIndex * columnWidth) + 'px';
+      groupHead.style.width = String(group.count * columnWidth) + 'px';
+      groupHead.setAttribute('aria-hidden', 'true');
+      dom.mobileVenueAxis.appendChild(groupHead);
+    });
+
+    venueColumns.forEach((entry, index) => {
+      const header = document.createElement('div');
+      const secondary = document.createElement('div');
+      const parts = getMobileVenueHeaderParts(entry.venue);
+
+      header.className = 'mobile-venue-roomhead';
+      header.style.left = String(index * columnWidth) + 'px';
+      header.style.width = String(columnWidth) + 'px';
+
+      secondary.className = 'mobile-venue-room';
+      secondary.textContent = parts.secondary || parts.primary;
+
+      header.appendChild(secondary);
+      dom.mobileVenueAxis.appendChild(header);
+    });
+
+    updateMobileVenueContextIndicator();
+  }
+
+  function renderMobileGridLines(venueCount, timelineEnd, totalWidth, totalHeight) {
+    const columnWidth = getMobileVenueColumnWidth();
+    const gridLines = document.createElement('div');
+
+    gridLines.id = 'mobile-grid-lines';
+    gridLines.style.width = totalWidth + 'px';
+    gridLines.style.height = totalHeight + 'px';
+
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
+      const line = document.createElement('div');
+      const isHour = minutes % 60 === 0;
+
+      line.className = isHour ? 'mobile-grid-line-hour' : 'mobile-grid-line-half';
+      line.style.top = mobileTimeToY(minutes) + 'px';
+      gridLines.appendChild(line);
+    }
+
+    for (let index = 1; index < venueCount; index += 1) {
+      const line = document.createElement('div');
+
+      line.className = 'mobile-grid-line-venue';
+      line.style.left = String(index * columnWidth) + 'px';
+      gridLines.appendChild(line);
+    }
+
+    dom.mobileGridContent.appendChild(gridLines);
+  }
+
+  function updateMobileVenueContextIndicator() {
+    if (!state.mobileLayout || !dom.mobileVenueCurrent) return;
+
+    const venueColumns = state.mobileVenueColumns || [];
+    if (venueColumns.length === 0) {
+      dom.mobileVenueCurrent.textContent = '';
+      dom.mobileVenueCurrent.classList.remove('is-visible');
+      return;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const firstVisibleIndex = Math.max(0, Math.min(
+      venueColumns.length - 1,
+      Math.floor((dom.mobileGridScroll.scrollLeft + 4) / columnWidth)
+    ));
+    const currentVenue = venueColumns[firstVisibleIndex];
+    const parts = currentVenue ? getMobileVenueHeaderParts(currentVenue.venue) : null;
+
+    if (!parts || !parts.primary) {
+      dom.mobileVenueCurrent.textContent = '';
+      dom.mobileVenueCurrent.classList.remove('is-visible');
+      return;
+    }
+
+    dom.mobileVenueCurrent.textContent = parts.primary;
+    dom.mobileVenueCurrent.classList.add('is-visible');
+  }
+
+  function createMobileFilmBlock(film, venueIndex, timelineEnd) {
+    const startMinutes = timeToMinutes(film.startTime);
+    const endMinutes = getFilmEndMinutes(film);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(startMinutes);
+    const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
+    const color = getSectionColor(film.section);
+    const isBookmarked = state.bookmarks.has(film.code);
+    const hasBlockAction = Boolean(film.detailUrl || film.hasMultipleDetails);
+    const block = document.createElement('div');
+    const detailLink = film.detailUrl ? createMobileFilmDetailLink(film) : null;
+
+    block.className = 'mobile-film-block' + (isBookmarked ? ' bookmarked' : '') + (hasBlockAction ? '' : ' no-detail-action');
+    block.style.left = x + 4 + 'px';
+    block.style.top = y + 4 + 'px';
+    block.style.width = Math.max(28, columnWidth - 8) + 'px';
+    block.style.height = Math.max(28, height - 8) + 'px';
+    block.style.background = getFilmBackground(color, isBookmarked, filmMatchesSearch(film), false);
+    block.style.borderColor = getFilmBorderColor(color, isBookmarked, filmMatchesSearch(film), false);
+    block.style.boxShadow = getFilmShadow(isBookmarked, filmMatchesSearch(film));
+
+    if (detailLink) {
+      block.appendChild(detailLink);
+    }
+
+    if (height > 40) {
+      (detailLink || block).appendChild(createMobileFilmTitleText(film.title));
+    }
+
+    if (height >= 62) {
+      block.classList.add('has-mobile-bookmark');
+      block.appendChild(createMobileFilmBookmarkToggle(film, isBookmarked));
+    }
+
+    if (film.hasMultipleDetails) {
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openDetailChooser(film);
+      });
+    }
+
+    return block;
+  }
+
+  function createMobileFilmDetailLink(film) {
+    const link = document.createElement('a');
+
+    link.className = 'mobile-film-block-link';
+    link.href = film.detailUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', film.title + ' 상세 페이지 새 탭 열기');
+    link.setAttribute('title', film.title + ' 상세 페이지 새 탭 열기');
+    link.addEventListener('click', event => {
+      event.stopPropagation();
+    });
+
+    return link;
+  }
+
+  function createMobileFilmTitleText(titleText) {
+    const title = document.createElement('div');
+
+    title.className = 'mobile-film-title-text';
+    title.textContent = titleText;
+
+    return title;
+  }
+
+  function createMobileFilmBookmarkToggle(film, isBookmarked) {
+    const button = document.createElement('button');
+
+    button.type = 'button';
+    button.className = 'mobile-film-bookmark-toggle' + (isBookmarked ? ' is-active' : '');
+    button.textContent = isBookmarked ? '★' : '☆';
+    button.setAttribute('aria-label', isBookmarked ? film.title + ' 관심 해제' : film.title + ' 관심 등록');
+    button.setAttribute('title', isBookmarked ? '관심 해제' : '관심 등록');
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleBookmark(film);
+      renderDay();
+    });
+
+    return button;
+  }
+
+  function createMobileLinkedProgramEventBlock(film, venueIndex, timelineEnd) {
+    const relatedEvent = getFollowUpProgramEvent(film);
+    const filmEndMinutes = getFilmEndMinutes(film);
+    const eventEndMinutes = getProgramEventEndMinutes(film);
+
+    if (!relatedEvent || filmEndMinutes === null || eventEndMinutes === null || filmEndMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(filmEndMinutes);
+    const height = Math.max(20, mobileTimeToY(Math.min(eventEndMinutes, timelineEnd)) - y);
+    const color = getSectionColor(film.section);
+    const block = document.createElement('div');
+    const eventLink = relatedEvent.url ? createMobileProgramEventLink(film, relatedEvent) : null;
+
+    block.className = 'mobile-program-event-block';
+    block.style.left = x + 8 + 'px';
+    block.style.top = y + 3 + 'px';
+    block.style.width = Math.max(20, columnWidth - 16) + 'px';
+    block.style.height = Math.max(20, height - 6) + 'px';
+    block.style.background = getProgramEventBackground(color, filmMatchesSearch(film), false);
+    block.style.borderColor = getProgramEventBorderColor(color, filmMatchesSearch(film), false);
+    block.style.boxShadow = getProgramEventShadow(filmMatchesSearch(film));
+
+    if (eventLink) {
+      block.appendChild(eventLink);
+    }
+
+    if (height > 56) {
+      (eventLink || block).appendChild(createMobileProgramEventText(relatedEvent.label));
+    }
+
+    return block;
+  }
+
+  function createMobileProgramEventLink(film, relatedEvent) {
+    const link = document.createElement('a');
+
+    link.className = 'mobile-program-event-link';
+    link.href = relatedEvent.url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.setAttribute('aria-label', film.title + ' 관련 ' + relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
+    link.setAttribute('title', relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
+    link.addEventListener('click', event => {
+      event.stopPropagation();
+    });
+
+    return link;
+  }
+
+  function createMobileProgramEventText(text) {
+    const label = document.createElement('div');
+
+    label.className = 'mobile-program-event-text';
+    label.textContent = text;
+
+    return label;
+  }
+
+  function renderMobileEmptyState(totalWidth, totalHeight) {
+    const emptyState = document.createElement('div');
+
+    emptyState.className = 'mobile-grid-empty';
+    emptyState.style.width = totalWidth + 'px';
+    emptyState.style.height = totalHeight + 'px';
+    emptyState.innerHTML = [
+      '<div class="mobile-grid-empty-card">',
+      '<div class="mobile-grid-empty-title">조건에 맞는 상영이 없어요.</div>',
+      '<div class="mobile-grid-empty-copy">검색어를 지우거나 상영관, 섹션, 관심 필터를 조금 넓혀 보세요.</div>',
+      '</div>',
+    ].join('');
+
+    dom.mobileGridContent.appendChild(emptyState);
+  }
+
+  function matchesActiveListFilters(film) {
+    if (state.bookmarkHighlight && !state.bookmarks.has(film.code)) return false;
+    if (state.activeSections && !state.activeSections.has(film.section)) return false;
+    if (hasSearchQuery() && !filmMatchesSearch(film)) return false;
+    return true;
+  }
+
+  function isFilmInActiveGroup(film) {
+    return state.activeGroups.has(getVenueGroup(film.venue).id);
+  }
+
+  function getMobileVenueColumns(dayData) {
+    const venuesByGroup = getVenuesForDay(dayData);
+    const columns = [];
+
+    config.venueGroups.forEach(group => {
+      if (!state.activeGroups.has(group.id)) return;
+
+      venuesByGroup[group.id].forEach(venue => {
+        columns.push({ venue, group });
+      });
+    });
+
+    return columns;
+  }
+
+  function getMobileVenueColumnWidth() {
+    const profile = getActiveDensityProfile();
+    return Math.round(Math.min(122, Math.max(92, profile.labelWidth * 0.64)) * 0.9);
+  }
+
+  function getMobileGridWidth(venueCount) {
+    return Math.max(getMobileVenueColumnWidth(), venueCount * getMobileVenueColumnWidth());
+  }
+
+  function getMobileTimeScale() {
+    return Math.min(1.3, Math.max(1.04, getActiveDensityProfile().scale - 0.26));
+  }
+
+  function getMobileGridHeight(timelineEnd) {
+    return Math.max(360, Math.round((timelineEnd - config.timeRange.start) * getMobileTimeScale()));
+  }
+
+  function mobileTimeToY(minutes) {
+    return (minutes - config.timeRange.start) * getMobileTimeScale();
   }
 
   function getCurrentDayData() {
@@ -1589,6 +2191,44 @@
       .replace('전주디지털독립영화관', '전주디지털')
       .replace('전북대학교 삼성문화회관', '전북대 삼성')
       .replace('한국소리문화의전당 모악당', '소리문화전당');
+  }
+
+  function getMobileVenueHeaderParts(venue) {
+    if (venue.startsWith('CGV전주고사 ')) {
+      return {
+        primary: 'CGV 전주고사',
+        secondary: venue.replace('CGV전주고사 ', '').trim(),
+      };
+    }
+
+    if (venue.startsWith('메가박스 전주객사 ')) {
+      return {
+        primary: '메가박스 전주객사',
+        secondary: venue.replace('메가박스 전주객사 ', '').trim(),
+      };
+    }
+
+    if (venue === '전주디지털독립영화관') {
+      return { primary: '전주디지털', secondary: '독립영화관' };
+    }
+
+    if (venue === '전북대학교 삼성문화회관') {
+      return { primary: '전북대학교', secondary: '삼성문화회관' };
+    }
+
+    if (venue === '한국소리문화의전당 모악당') {
+      return { primary: '소리문화전당', secondary: '모악당' };
+    }
+
+    const lastSpaceIndex = venue.lastIndexOf(' ');
+    if (lastSpaceIndex > 0) {
+      return {
+        primary: venue.slice(0, lastSpaceIndex).trim(),
+        secondary: venue.slice(lastSpaceIndex + 1).trim(),
+      };
+    }
+
+    return { primary: venue, secondary: '' };
   }
 
   function formatBookmarkVenue(venue) {
