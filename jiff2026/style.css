@@ -1288,17 +1288,21 @@ body.mobile-layout .mobile-grid-empty-copy {
   text-transform: uppercase;
   background: var(--bg);
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 body.compact-viewport:not(.mobile-layout) .venue-label {
-  padding: 0 8px;
-  font-size: calc(var(--font-small) * 1.14);
+  padding: 0 6px;
+  gap: 5px;
+  font-size: calc(var(--font-small) * 1.1);
 }
 body.compact-viewport:not(.mobile-layout) #venue-labels {
-  width: 106px;
+  width: 95px;
 }
 body.compact-viewport:not(.mobile-layout) .venue-group-header {
-  padding: 0 8px;
-  font-size: calc(var(--font-tiny) * 1.18);
+  padding: 0 0 0 6px;
+  font-size: calc(var(--font-tiny) * 1.12);
 }
 .venue-group-header-timeline {
   height: 22px;
@@ -2005,8 +2009,8 @@ body.compact-viewport .bp-actions {
 .bp-close {
   grid-area: close;
   justify-self: end;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -2015,12 +2019,14 @@ body.compact-viewport .bp-actions {
   border: none;
   color: var(--text-dim);
   cursor: pointer;
-  font-size: calc(var(--font-logo) * 1.35);
+  font-size: calc(var(--font-logo) * 1.45);
   line-height: 1;
 }
 body.compact-viewport .bp-close {
+  width: 36px;
+  height: 36px;
   margin-left: 12px;
-  font-size: calc(var(--font-logo) * 2);
+  font-size: 24px;
 }
 #bookmarks-list { flex: 1; overflow-y: auto; padding: 8px; }
 body.compact-viewport #bookmarks-list {

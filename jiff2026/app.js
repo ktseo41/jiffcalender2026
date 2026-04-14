@@ -569,7 +569,7 @@
     dot.style.background = group.color;
 
     label.appendChild(dot);
-    label.appendChild(document.createTextNode(shortenVenueName(venue)));
+    label.appendChild(document.createTextNode(getVenueLabelText(venue, group)));
 
     return label;
   }
@@ -2408,6 +2408,31 @@
       .replace('전주디지털독립영화관', '전주디지털')
       .replace('전북대학교 삼성문화회관', '전북대 삼성')
       .replace('한국소리문화의전당 모악당', '소리문화전당');
+  }
+
+  function getVenueLabelText(venue, group) {
+    if (!(state.compactViewport && !state.mobileLayout)) {
+      return shortenVenueName(venue);
+    }
+
+    if (group && (group.id === 'cgv' || group.id === 'mega')) {
+      const parts = getMobileVenueHeaderParts(venue);
+      return parts.secondary || parts.primary;
+    }
+
+    if (venue === '전주디지털독립영화관') {
+      return '전주디지털';
+    }
+
+    if (venue === '전북대학교 삼성문화회관') {
+      return '전북대 삼성';
+    }
+
+    if (venue === '한국소리문화의전당 모악당') {
+      return '소리문화 모악';
+    }
+
+    return shortenVenueName(venue);
   }
 
   function getMobileVenueHeaderParts(venue) {
