@@ -1806,7 +1806,7 @@
 
   function getMobileVenueColumnWidth() {
     const profile = getActiveDensityProfile();
-    return Math.round(Math.min(122, Math.max(92, profile.labelWidth * 0.64)) * 0.9);
+    return Math.round(Math.min(122, Math.max(92, profile.labelWidth * 0.64)) * 0.84) - 14;
   }
 
   function getMobileGridWidth(venueCount) {
