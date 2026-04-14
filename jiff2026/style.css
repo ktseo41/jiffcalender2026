@@ -907,8 +907,21 @@ body.mobile-layout .mobile-venue-roomhead {
   align-items: flex-end;
   padding: 0 8px 3px;
 }
+body.mobile-layout .mobile-venue-roomhead.mobile-venue-roomhead-single {
+  top: 0;
+  padding: 0;
+  align-items: stretch;
+}
 body.mobile-layout .mobile-venue-room {
   line-height: 1;
+}
+body.mobile-layout .mobile-venue-room.is-full-label {
+  padding: 3px 8px 0;
+  font-size: 10px;
+  line-height: 1.02;
+}
+body.mobile-layout .mobile-venue-room.is-full-label.is-samsung-hall {
+  font-size: 11px;
 }
 body.mobile-layout .mobile-film-title-text {
   font-size: calc(var(--font-small) * var(--mobile-font-scale));
@@ -1063,6 +1076,12 @@ body.mobile-layout .mobile-grid-empty-copy {
   border-right: 1px solid rgba(255,255,255,0.14);
   box-shadow: inset -1px 0 0 rgba(0,0,0,0.18);
 }
+.mobile-venue-roomhead-single {
+  top: 0;
+  padding: 0;
+  align-items: stretch;
+  background: linear-gradient(90deg, rgba(20,20,23,0.98), rgba(20,20,23,0.82));
+}
 .mobile-venue-room {
   font-size: var(--font-ui);
   line-height: 1.15;
@@ -1071,6 +1090,17 @@ body.mobile-layout .mobile-grid-empty-copy {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.mobile-venue-room.is-full-label {
+  display: flex;
+  align-items: flex-start;
+  width: 100%;
+  padding: 4px 8px 0;
+  color: var(--accent);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.02;
 }
 #mobile-grid-content {
   position: relative;
@@ -1206,6 +1236,12 @@ body.mobile-layout .mobile-grid-empty-copy {
   font-size: var(--font-tiny);
   font-weight: 700;
   color: rgba(255,255,255,0.84);
+}
+.mobile-program-event-text.is-compact {
+  padding: 4px 2px 2px;
+  line-height: 1.02;
+  font-size: calc(var(--font-tiny) * 0.92);
+  -webkit-line-clamp: 3;
 }
 .mobile-grid-empty {
   position: absolute;

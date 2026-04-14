@@ -1184,7 +1184,7 @@
     ];
 
     if (film.directorLabel) infoRows.push(['감독', film.directorLabel]);
-    if (film.meta) infoRows.push(['정보', film.meta]);
+    if (film.code) infoRows.push(['상영코드', film.code]);
 
     if (film.code) {
       primaryActions.push(
@@ -1224,9 +1224,6 @@
       '</div>',
       film.shorts
         ? '<div class="dc-mobile-block"><div class="dc-mobile-label">상영작</div><div class="dc-mobile-copy">' + escapeHtml(film.shorts) + '</div></div>'
-        : '',
-      tags.length > 0
-        ? '<div class="dc-mobile-tags">' + tags.map(tag => '<span class="dc-mobile-tag">' + escapeHtml(tag) + '</span>').join('') + '</div>'
         : '',
       relatedEvent
         ? [
@@ -1630,6 +1627,11 @@
     venueColumns.forEach((entry, index) => {
       const parts = getMobileVenueHeaderParts(entry.venue);
 
+      if (parts.singleHeader) {
+        activeGroup = null;
+        return;
+      }
+
       if (!activeGroup || activeGroup.label !== parts.primary) {
         activeGroup = {
           label: parts.primary,
@@ -1657,12 +1659,14 @@
       const secondary = document.createElement('div');
       const parts = getMobileVenueHeaderParts(entry.venue);
 
-      header.className = 'mobile-venue-roomhead';
+      header.className = 'mobile-venue-roomhead' + (parts.singleHeader ? ' mobile-venue-roomhead-single' : '');
       header.style.left = String(index * columnWidth) + 'px';
       header.style.width = String(columnWidth) + 'px';
 
-      secondary.className = 'mobile-venue-room';
-      secondary.textContent = parts.secondary || parts.primary;
+      secondary.className = 'mobile-venue-room'
+        + (parts.singleHeader ? ' is-full-label' : '')
+        + (entry.venue === '전북대학교 삼성문화회관' ? ' is-samsung-hall' : '');
+      secondary.textContent = parts.singleHeader ? parts.primary : (parts.secondary || parts.primary);
 
       header.appendChild(secondary);
       dom.mobileVenueAxis.appendChild(header);
@@ -1763,9 +1767,9 @@
       block.appendChild(createMobileFilmBookmarkMarker());
     }
 
-    const titleMode = getMobileFilmTitleMode(film.title, height);
-    if (titleMode) {
-      block.appendChild(createMobileFilmTitleText(film.title, titleMode));
+    const titleConfig = getMobileFilmTitleConfig(film, height);
+    if (titleConfig) {
+      block.appendChild(createMobileFilmTitleText(titleConfig.text, titleConfig.mode, height));
     }
 
     block.addEventListener('click', event => {
@@ -1791,21 +1795,57 @@
     return marker;
   }
 
-  function getMobileFilmTitleMode(titleText, height) {
-    const normalizedTitle = String(titleText || '').replace(/\s+/g, '');
+  function getMobileFilmTitleConfig(film, height) {
+    const defaultTitle = film && film.title ? film.title : '';
+    if (!defaultTitle) return null;
 
-    if (height > 40) return 'default';
-    if (height >= 28 && normalizedTitle.length > 0 && normalizedTitle.length <= 5) return 'compact';
-    return '';
+    if (height > 40) {
+      return { text: defaultTitle, mode: 'default' };
+    }
+
+    if (height < 28) return null;
+
+    const compactTitle = getMobileCompactFilmTitle(film);
+    if (!compactTitle) return null;
+
+    return { text: compactTitle, mode: 'compact' };
   }
 
-  function createMobileFilmTitleText(titleText, mode = 'default') {
+  function getMobileCompactFilmTitle(film) {
+    const candidates = [];
+
+    if (film && film.shorts) {
+      candidates.push(...film.shorts.split('/').map(part => part.trim()).filter(Boolean));
+    }
+
+    if (film && film.title) {
+      candidates.push(...film.title.split(' + ').map(part => part.trim()).filter(Boolean));
+      candidates.push(film.title.trim());
+    }
+
+    return candidates.find(title => {
+      const normalizedTitle = String(title || '').replace(/\s+/g, '');
+      return normalizedTitle.length > 0 && normalizedTitle.length <= 5;
+    }) || '';
+  }
+
+  function createMobileFilmTitleText(titleText, mode = 'default', height = 0) {
     const title = document.createElement('div');
 
     title.className = 'mobile-film-title-text' + (mode === 'compact' ? ' is-compact' : '');
     title.textContent = titleText;
+    if (mode !== 'compact') {
+      title.style.setProperty('-webkit-line-clamp', String(getMobileFilmLineClamp(height)));
+    }
 
     return title;
+  }
+
+  function getMobileFilmLineClamp(height) {
+    if (height >= 140) return 10;
+    if (height >= 110) return 8;
+    if (height >= 80) return 7;
+    return 6;
   }
 
   function createMobileLinkedProgramEventBlock(film, venueIndex, timelineEnd) {
@@ -1838,8 +1878,9 @@
     block.setAttribute('tabindex', '0');
     block.setAttribute('aria-label', film.title + ' 관련 행사 정보 열기');
 
-    if (height > 56) {
-      block.appendChild(createMobileProgramEventText(relatedEvent.label));
+    const eventTextConfig = getMobileProgramEventTextConfig(relatedEvent.label, height);
+    if (eventTextConfig) {
+      block.appendChild(createMobileProgramEventText(eventTextConfig.text, eventTextConfig.compact));
     }
 
     block.addEventListener('click', event => {
@@ -1855,13 +1896,29 @@
     return block;
   }
 
-  function createMobileProgramEventText(text) {
+  function createMobileProgramEventText(text, compact = false) {
     const label = document.createElement('div');
 
-    label.className = 'mobile-program-event-text';
+    label.className = 'mobile-program-event-text' + (compact ? ' is-compact' : '');
     label.textContent = text;
 
     return label;
+  }
+
+  function getMobileProgramEventTextConfig(label, height) {
+    if (height > 56) {
+      return { text: label, compact: false };
+    }
+
+    if (height >= 32) {
+      if (label === '전주와이드토크') {
+        return { text: '와이드 토크', compact: true };
+      }
+
+      return { text: label, compact: true };
+    }
+
+    return null;
   }
 
   function renderMobileEmptyState(totalWidth, totalHeight) {
@@ -2451,11 +2508,11 @@
     }
 
     if (venue === '전주디지털독립영화관') {
-      return { primary: '전주디지털독립영화관', secondary: '' };
+      return { primary: '전주디지털독립영화관', secondary: '', singleHeader: true };
     }
 
     if (venue === '전북대학교 삼성문화회관') {
-      return { primary: '전북대학교', secondary: '삼성문화회관' };
+      return { primary: '삼성문화회관', secondary: '', singleHeader: true };
     }
 
     if (venue === '한국소리문화의전당 모악당') {
