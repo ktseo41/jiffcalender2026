@@ -41,7 +41,21 @@
       <button type="button" class="search-clear-btn" id="mobileSearchClearBtn" aria-label="검색 닫기">✕</button>
     </div>
   </div>
-  <button type="button" class="header-view-toggle" id="mobileDesktopToggleBtn" aria-label="PC 보기로 전환" title="PC 보기">PC</button>
+  <button
+    type="button"
+    class="header-view-toggle"
+    id="mobileDesktopToggleBtn"
+    aria-label="가로 보기로 전환"
+    title="가로 보기"
+    aria-pressed="false"
+    data-view-mode="vertical"
+  >
+    <span class="header-view-toggle-track" aria-hidden="true">
+      <span class="header-view-toggle-thumb"></span>
+      <span class="header-view-toggle-option header-view-toggle-option-horizontal">가로</span>
+      <span class="header-view-toggle-option header-view-toggle-option-vertical">세로</span>
+    </span>
+  </button>
   <button type="button" class="header-search-toggle" id="mobileSearchToggleBtn" aria-label="검색 열기" title="검색">
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <circle cx="11" cy="11" r="6.5"></circle>

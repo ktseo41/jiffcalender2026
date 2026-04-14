@@ -439,12 +439,15 @@
   function renderViewportToggle() {
     const shouldShow = state.compactViewport;
     const isDesktopMode = shouldShow && !state.mobileLayout;
+    const currentModeLabel = isDesktopMode ? '가로' : '세로';
+    const nextModeLabel = isDesktopMode ? '세로' : '가로';
 
     dom.mobileDesktopToggleBtn.hidden = !shouldShow;
     dom.mobileDesktopToggleBtn.classList.toggle('is-active', isDesktopMode);
-    dom.mobileDesktopToggleBtn.textContent = isDesktopMode ? 'MO' : 'PC';
-    dom.mobileDesktopToggleBtn.setAttribute('aria-label', isDesktopMode ? '모바일 보기로 전환' : 'PC 보기로 전환');
-    dom.mobileDesktopToggleBtn.setAttribute('title', isDesktopMode ? '모바일 보기' : 'PC 보기');
+    dom.mobileDesktopToggleBtn.dataset.viewMode = isDesktopMode ? 'horizontal' : 'vertical';
+    dom.mobileDesktopToggleBtn.setAttribute('aria-pressed', isDesktopMode ? 'true' : 'false');
+    dom.mobileDesktopToggleBtn.setAttribute('aria-label', '현재 ' + currentModeLabel + ' 보기, 눌러서 ' + nextModeLabel + ' 보기로 전환');
+    dom.mobileDesktopToggleBtn.setAttribute('title', nextModeLabel + ' 보기로 전환');
   }
 
   function renderDensityControls() {

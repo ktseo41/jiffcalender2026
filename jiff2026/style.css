@@ -605,13 +605,60 @@ body.compact-viewport .header-view-toggle {
   grid-row: 1;
   margin-left: 0;
   justify-self: end;
-  min-width: 28px;
+  min-width: 72px;
   height: 36px;
-  padding: 0 6px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
   color: var(--text-dim);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+}
+body.compact-viewport .header-view-toggle-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 3px;
+}
+body.compact-viewport .header-view-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc((100% - 6px) / 2);
+  height: calc(100% - 6px);
+  border-radius: 999px;
+  background: rgba(244,239,223,0.12);
+  border: 1px solid rgba(255,255,255,0.14);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+body.compact-viewport .header-view-toggle[data-view-mode="vertical"] .header-view-toggle-thumb {
+  transform: translateX(100%);
+}
+body.compact-viewport .header-view-toggle-option {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-width: 0;
+  color: rgba(230,230,235,0.72);
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+body.compact-viewport .header-view-toggle[data-view-mode="horizontal"] .header-view-toggle-option-horizontal,
+body.compact-viewport .header-view-toggle[data-view-mode="vertical"] .header-view-toggle-option-vertical {
+  color: #f6eed4;
+}
+body.compact-viewport .header-view-toggle[data-view-mode="horizontal"] .header-view-toggle-option-vertical,
+body.compact-viewport .header-view-toggle[data-view-mode="vertical"] .header-view-toggle-option-horizontal {
+  opacity: 0.9;
 }
 body.compact-viewport .header-search-toggle {
   display: inline-flex;
@@ -756,11 +803,18 @@ body.compact-viewport .mobile-search-shell .search-clear-btn {
 body.compact-viewport .header-view-toggle:hover,
 body.compact-viewport .header-search-toggle:hover,
 body.compact-viewport .header-nav-toggle:hover,
-body.compact-viewport .header-view-toggle.is-active,
 body.compact-viewport .header-search-toggle.is-active {
   border: none;
   background: transparent;
   color: var(--accent);
+}
+body.compact-viewport .header-view-toggle:hover {
+  border-color: rgba(200,168,75,0.38);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+body.compact-viewport .header-view-toggle.is-active {
+  border-color: rgba(200,168,75,0.3);
 }
 body.compact-viewport .header-nav-toggle.is-active {
   color: var(--accent);
