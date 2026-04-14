@@ -856,22 +856,22 @@
 
   function getMobileFilmBackground(color, isBookmarked, isSearchMatch, isDimmed) {
     if (!isDimmed) return getFilmBackground(color, isBookmarked, isSearchMatch, false);
-    return color + '52';
+    return color + '34';
   }
 
   function getMobileFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed) {
     if (!isDimmed) return getFilmBorderColor(color, isBookmarked, isSearchMatch, false);
-    return color + '88';
+    return color + '5c';
   }
 
   function getMobileProgramEventBackground(color, isSearchMatch, isDimmed) {
     if (!isDimmed) return getProgramEventBackground(color, isSearchMatch, false);
-    return color + '24';
+    return color + '16';
   }
 
   function getMobileProgramEventBorderColor(color, isSearchMatch, isDimmed) {
     if (!isDimmed) return getProgramEventBorderColor(color, isSearchMatch, false);
-    return color + '80';
+    return color + '58';
   }
 
   function getProgramEventShadow(isSearchMatch) {
