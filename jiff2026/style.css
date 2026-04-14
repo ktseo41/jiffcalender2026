@@ -410,6 +410,25 @@ body {
     transform: translateX(-50%) translateY(18px);
     transition: none;
   }
+
+  body:not(.app-ready) #bookmarks-panel,
+  body:not(.app-ready) #detail-chooser-panel {
+    left: 0;
+    right: 0;
+    top: auto;
+    bottom: 0;
+    width: auto;
+    max-height: min(82vh, 760px);
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    border-top: 1px solid var(--border);
+    border-radius: 22px 22px 0 0;
+    transform: translateY(calc(100% + 32px));
+    transition: none;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 .mobile-header-search,
