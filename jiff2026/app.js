@@ -122,6 +122,7 @@
     dom.bookmarksCloseBtn.addEventListener('click', closeBookmarksPanel);
     dom.mobileNoticeCloseBtn.addEventListener('click', dismissMobileNotice);
     dom.detailChooserCloseBtn.addEventListener('click', closeDetailChooser);
+    dom.detailChooserList.addEventListener('click', handleDetailChooserListClick);
     dom.overlay.addEventListener('click', closeOpenPanels);
     dom.timelineScroll.addEventListener('scroll', syncLabelScroll);
     dom.mobileGridScroll.addEventListener('scroll', syncMobileTimeLabelScroll);
@@ -257,6 +258,33 @@
     const button = event.target.closest('[data-bookmark-remove]');
     if (!button) return;
     removeBookmark(button.dataset.bookmarkRemove);
+  }
+
+  function handleDetailChooserListClick(event) {
+    const closeButton = event.target.closest('[data-detail-close]');
+    if (closeButton) {
+      closeDetailChooser();
+      return;
+    }
+
+    const scrollButton = event.target.closest('[data-detail-scroll]');
+    if (scrollButton) {
+      const target = dom.detailChooserList.querySelector('[data-detail-section="' + scrollButton.dataset.detailScroll + '"]');
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
+
+    const bookmarkButton = event.target.closest('[data-detail-bookmark]');
+    if (!bookmarkButton) return;
+
+    const film = getFilmByCode(bookmarkButton.dataset.detailBookmark);
+    if (!film) return;
+
+    toggleBookmark(film);
+    renderDay();
+    renderDetailChooser(film);
   }
 
   function handleMouseMove(event) {
@@ -1081,6 +1109,7 @@
     closeBookmarksPanel();
     hideTooltip();
     renderDetailChooser(film);
+    dom.detailChooserPanel.dataset.filmCode = film && film.code ? film.code : '';
     dom.detailChooserPanel.setAttribute('aria-hidden', 'false');
     dom.detailChooserPanel.classList.add('open');
     syncOverlayState();
@@ -1089,9 +1118,12 @@
   function closeDetailChooser() {
     dom.detailChooserPanel.classList.remove('open');
     dom.detailChooserPanel.setAttribute('aria-hidden', 'true');
-    dom.detailChooserTitle.textContent = '상영작 목록';
+    dom.detailChooserTitle.textContent = state.compactViewport ? '상영 정보' : '상영작 목록';
     dom.detailChooserSubtitle.textContent = '';
     dom.detailChooserList.innerHTML = '';
+    dom.detailChooserCloseBtn.setAttribute('aria-label', state.compactViewport ? '상영 정보 닫기' : '상영작 목록 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', state.compactViewport ? '상영 정보 닫기' : '상영작 목록 닫기');
+    delete dom.detailChooserPanel.dataset.filmCode;
     syncOverlayState();
   }
 
@@ -1111,6 +1143,15 @@
   }
 
   function renderDetailChooser(film) {
+    if (state.compactViewport) {
+      dom.detailChooserCloseBtn.setAttribute('aria-label', '상영 정보 닫기');
+      dom.detailChooserCloseBtn.setAttribute('title', '상영 정보 닫기');
+      renderCompactDetailChooser(film);
+      return;
+    }
+
+    dom.detailChooserCloseBtn.setAttribute('aria-label', '상영작 목록 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', '상영작 목록 닫기');
     dom.detailChooserTitle.textContent = film.title || '상영작 목록';
     dom.detailChooserSubtitle.textContent = [film.startTime + ' - ' + film.endTime, film.venue, film.section]
       .filter(Boolean)
@@ -1126,6 +1167,96 @@
         '</a>',
       ].join('');
     }).join('');
+  }
+
+  function renderCompactDetailChooser(film) {
+    const tags = getMetaTags(film.meta);
+    const relatedEvent = film.relatedEvent || null;
+    const detailCandidates = film.detailCandidates || [];
+    const isBookmarked = state.bookmarks.has(film.code);
+    const primaryActions = [];
+    const infoRows = [
+      ['시간', film.startTime && film.endTime ? film.startTime + ' – ' + film.endTime : '—'],
+      ['상영관', film.venue || '—'],
+      ['섹션', film.section || '—'],
+    ];
+
+    if (film.directorLabel) infoRows.push(['감독', film.directorLabel]);
+    if (film.meta) infoRows.push(['정보', film.meta]);
+
+    if (film.code) {
+      primaryActions.push(
+        '<button type="button" class="dc-mobile-action dc-mobile-action-bookmark' + (isBookmarked ? ' is-active' : '') + '" data-detail-bookmark="' + escapeHtml(film.code) + '">'
+        + (isBookmarked ? '★ 관심 해제' : '☆ 관심 등록')
+        + '</button>'
+      );
+    }
+
+    if (detailCandidates.length === 1) {
+      primaryActions.push(
+        '<a class="dc-mobile-action" href="' + escapeHtml(detailCandidates[0].url) + '" target="_blank" rel="noopener noreferrer">상세보기 (새 탭 열기)</a>'
+      );
+    } else if (detailCandidates.length > 1) {
+      primaryActions.push(
+        '<button type="button" class="dc-mobile-action" data-detail-scroll="detail-links">상세보기</button>'
+      );
+    }
+
+    dom.detailChooserTitle.textContent = film.title || '상영 정보';
+    dom.detailChooserSubtitle.textContent = '';
+
+    dom.detailChooserList.innerHTML = [
+      '<div class="dc-mobile-sheet">',
+      primaryActions.length > 0
+        ? '<div class="dc-mobile-actions dc-mobile-actions-primary">' + primaryActions.join('') + '</div>'
+        : '',
+      '<div class="dc-mobile-summary">',
+      '<div class="dc-mobile-section" style="color:' + escapeHtml(getSectionColor(film.section)) + '">' + escapeHtml(film.section || '—') + '</div>',
+      '<div class="dc-mobile-grid">',
+      infoRows.map(row => [
+        '<div class="dc-mobile-row">',
+        '<span class="dc-mobile-label">' + escapeHtml(row[0]) + '</span>',
+        '<span class="dc-mobile-value">' + escapeHtml(row[1]) + '</span>',
+        '</div>',
+      ].join('')).join(''),
+      '</div>',
+      film.shorts
+        ? '<div class="dc-mobile-block"><div class="dc-mobile-label">상영작</div><div class="dc-mobile-copy">' + escapeHtml(film.shorts) + '</div></div>'
+        : '',
+      tags.length > 0
+        ? '<div class="dc-mobile-tags">' + tags.map(tag => '<span class="dc-mobile-tag">' + escapeHtml(tag) + '</span>').join('') + '</div>'
+        : '',
+      relatedEvent
+        ? [
+            '<div class="dc-mobile-block">',
+            '<div class="dc-mobile-label">연결 행사</div>',
+            '<div class="dc-mobile-copy">',
+            escapeHtml(relatedEvent.label),
+            relatedEvent.scheduleMode === 'separate'
+              ? ' · ' + escapeHtml(relatedEvent.separateDate + ' ' + relatedEvent.separateStartTime + ' ' + relatedEvent.separateVenue)
+              : ' · 상영 후 ' + escapeHtml(String(relatedEvent.durationMinutes)) + '분',
+            '</div>',
+            '</div>',
+          ].join('')
+        : '',
+      '</div>',
+      relatedEvent && relatedEvent.url
+        ? '<div class="dc-mobile-actions dc-mobile-actions-secondary"><a class="dc-mobile-action dc-mobile-action-secondary is-full" href="' + escapeHtml(relatedEvent.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(relatedEvent.label) + ' 보기 (새 탭 열기)</a></div>'
+        : '',
+      detailCandidates.length > 1
+        ? '<div class="dc-mobile-detail-links" data-detail-section="detail-links"><div class="dc-mobile-label">상세 링크</div><div class="dc-mobile-list">' + detailCandidates.map((candidate, index) => {
+            const title = candidate.title || film.title || ('상영작 ' + String(index + 1));
+
+            return [
+              '<a class="dc-item" href="' + escapeHtml(candidate.url) + '" target="_blank" rel="noopener noreferrer">',
+              '<span class="dc-item-title">' + escapeHtml(title) + '</span>',
+              '<span class="dc-item-meta">상세 페이지 새 탭 열기</span>',
+              '</a>',
+            ].join('');
+          }).join('') + '</div></div>'
+        : '',
+      '</div>',
+    ].join('');
   }
 
   function showTooltip(film, color) {
@@ -1611,14 +1742,11 @@
     const isBookmarked = state.bookmarks.has(film.code);
     const isSearchMatch = filmMatchesSearch(film);
     const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
-    const hasBlockAction = Boolean(film.detailUrl || film.hasMultipleDetails);
     const block = document.createElement('div');
-    const detailLink = film.detailUrl ? createMobileFilmDetailLink(film) : null;
 
     block.className = 'mobile-film-block'
       + (isBookmarked ? ' bookmarked' : '')
-      + (isDimmed ? ' is-dimmed' : '')
-      + (hasBlockAction ? '' : ' no-detail-action');
+      + (isDimmed ? ' is-dimmed' : '');
     block.style.left = x + 4 + 'px';
     block.style.top = y + 4 + 'px';
     block.style.width = Math.max(28, columnWidth - 8) + 'px';
@@ -1626,44 +1754,25 @@
     block.style.background = getMobileFilmBackground(color, isBookmarked, isSearchMatch, isDimmed);
     block.style.borderColor = getMobileFilmBorderColor(color, isBookmarked, isSearchMatch, isDimmed);
     block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
-
-    if (detailLink) {
-      block.appendChild(detailLink);
-    }
+    block.setAttribute('role', 'button');
+    block.setAttribute('tabindex', '0');
+    block.setAttribute('aria-label', film.title + ' 정보 열기');
 
     if (height > 40) {
-      (detailLink || block).appendChild(createMobileFilmTitleText(film.title));
+      block.appendChild(createMobileFilmTitleText(film.title));
     }
 
-    if (height >= 62) {
-      block.classList.add('has-mobile-bookmark');
-      block.appendChild(createMobileFilmBookmarkToggle(film, isBookmarked));
-    }
-
-    if (film.hasMultipleDetails) {
-      block.addEventListener('click', event => {
-        event.stopPropagation();
-        openDetailChooser(film);
-      });
-    }
-
-    return block;
-  }
-
-  function createMobileFilmDetailLink(film) {
-    const link = document.createElement('a');
-
-    link.className = 'mobile-film-block-link';
-    link.href = film.detailUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.setAttribute('aria-label', film.title + ' 상세 페이지 새 탭 열기');
-    link.setAttribute('title', film.title + ' 상세 페이지 새 탭 열기');
-    link.addEventListener('click', event => {
+    block.addEventListener('click', event => {
       event.stopPropagation();
+      openDetailChooser(film);
+    });
+    block.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openDetailChooser(film);
     });
 
-    return link;
+    return block;
   }
 
   function createMobileFilmTitleText(titleText) {
@@ -1673,23 +1782,6 @@
     title.textContent = titleText;
 
     return title;
-  }
-
-  function createMobileFilmBookmarkToggle(film, isBookmarked) {
-    const button = document.createElement('button');
-
-    button.type = 'button';
-    button.className = 'mobile-film-bookmark-toggle' + (isBookmarked ? ' is-active' : '');
-    button.textContent = isBookmarked ? '★' : '☆';
-    button.setAttribute('aria-label', isBookmarked ? film.title + ' 관심 해제' : film.title + ' 관심 등록');
-    button.setAttribute('title', isBookmarked ? '관심 해제' : '관심 등록');
-    button.addEventListener('click', event => {
-      event.stopPropagation();
-      toggleBookmark(film);
-      renderDay();
-    });
-
-    return button;
   }
 
   function createMobileLinkedProgramEventBlock(film, venueIndex, timelineEnd) {
@@ -1709,7 +1801,6 @@
     const isSearchMatch = filmMatchesSearch(film);
     const isDimmed = shouldDimFilm(film, state.bookmarks.has(film.code), isSearchMatch);
     const block = document.createElement('div');
-    const eventLink = relatedEvent.url ? createMobileProgramEventLink(film, relatedEvent) : null;
 
     block.className = 'mobile-program-event-block' + (isDimmed ? ' is-dimmed' : '');
     block.style.left = x + 8 + 'px';
@@ -1719,32 +1810,25 @@
     block.style.background = getMobileProgramEventBackground(color, isSearchMatch, isDimmed);
     block.style.borderColor = getMobileProgramEventBorderColor(color, isSearchMatch, isDimmed);
     block.style.boxShadow = getProgramEventShadow(isSearchMatch);
-
-    if (eventLink) {
-      block.appendChild(eventLink);
-    }
+    block.setAttribute('role', 'button');
+    block.setAttribute('tabindex', '0');
+    block.setAttribute('aria-label', film.title + ' 관련 행사 정보 열기');
 
     if (height > 56) {
-      (eventLink || block).appendChild(createMobileProgramEventText(relatedEvent.label));
+      block.appendChild(createMobileProgramEventText(relatedEvent.label));
     }
 
-    return block;
-  }
-
-  function createMobileProgramEventLink(film, relatedEvent) {
-    const link = document.createElement('a');
-
-    link.className = 'mobile-program-event-link';
-    link.href = relatedEvent.url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.setAttribute('aria-label', film.title + ' 관련 ' + relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
-    link.setAttribute('title', relatedEvent.label + ' 이벤트 페이지 새 탭 열기');
-    link.addEventListener('click', event => {
+    block.addEventListener('click', event => {
       event.stopPropagation();
+      openDetailChooser(film);
+    });
+    block.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openDetailChooser(film);
     });
 
-    return link;
+    return block;
   }
 
   function createMobileProgramEventText(text) {
@@ -1787,6 +1871,11 @@
 
   function isFilmInActiveGroup(film) {
     return state.activeGroups.has(getVenueGroup(film.venue).id);
+  }
+
+  function getFilmByCode(code) {
+    if (!code) return null;
+    return state.allData.find(row => row.code === code) || null;
   }
 
   function getMobileVenueColumns(dayData) {
