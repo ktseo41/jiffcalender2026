@@ -2089,6 +2089,12 @@ body.compact-viewport #bookmarks-list {
 }
 .bm-remove { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--font-bookmark-title); flex-shrink: 0; }
 .bm-remove:hover { color: #e05; }
+body.compact-viewport .bm-remove {
+  min-width: 28px;
+  min-height: 28px;
+  font-size: calc(var(--font-bookmark-title) * 1.5);
+  line-height: 1;
+}
 .bp-empty { text-align: center; color: var(--text-faint); font-size: var(--font-body); padding: 40px 20px; line-height: 1.8; }
 
 /* LEGEND */

@@ -605,7 +605,8 @@
     const isBookmarked = state.bookmarks.has(film.code);
     const isSearchMatch = filmMatchesSearch(film);
     const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
-    const hasBlockAction = Boolean(film.detailUrl || film.hasMultipleDetails);
+    const useCompactDetailDrawer = state.compactViewport;
+    const hasBlockAction = useCompactDetailDrawer || Boolean(film.detailUrl || film.hasMultipleDetails);
 
     const block = document.createElement('div');
     block.className = 'film-block' + (isBookmarked ? ' bookmarked' : '') + (hasBlockAction ? '' : ' no-detail-action');
@@ -616,7 +617,7 @@
     block.style.opacity = isDimmed ? '0.15' : '1';
     block.style.boxShadow = getFilmShadow(isBookmarked, isSearchMatch);
 
-    const detailLink = film.detailUrl ? createFilmDetailLink(film) : null;
+    const detailLink = !useCompactDetailDrawer && film.detailUrl ? createFilmDetailLink(film) : null;
 
     if (detailLink) {
       block.appendChild(detailLink);
@@ -632,11 +633,27 @@
       block.appendChild(createFilmBookmarkToggle(film, isBookmarked, block));
     }
 
+    if (useCompactDetailDrawer) {
+      block.setAttribute('role', 'button');
+      block.setAttribute('tabindex', '0');
+      block.setAttribute('aria-label', film.title + ' 정보 열기');
+    }
+
     block.addEventListener('mouseenter', () => showTooltip(film, color));
     block.addEventListener('mousemove', moveTooltip);
     block.addEventListener('mouseleave', hideTooltip);
 
-    if (film.hasMultipleDetails) {
+    if (useCompactDetailDrawer) {
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openDetailChooser(film);
+      });
+      block.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openDetailChooser(film);
+      });
+    } else if (film.hasMultipleDetails) {
       block.addEventListener('click', event => {
         event.stopPropagation();
         openDetailChooser(film);
@@ -686,6 +703,7 @@
     const isBookmarked = state.bookmarks.has(film.code);
     const isSearchMatch = filmMatchesSearch(film);
     const isDimmed = shouldDimFilm(film, isBookmarked, isSearchMatch);
+    const useCompactDetailDrawer = state.compactViewport;
     const block = document.createElement('div');
 
     block.className = 'program-event-block';
@@ -696,7 +714,7 @@
     block.style.opacity = isDimmed ? '0.15' : '1';
     block.style.boxShadow = getProgramEventShadow(isSearchMatch);
 
-    const eventLink = relatedEvent.url ? createProgramEventLink(film, relatedEvent) : null;
+    const eventLink = !useCompactDetailDrawer && relatedEvent.url ? createProgramEventLink(film, relatedEvent) : null;
 
     if (eventLink) {
       block.appendChild(eventLink);
@@ -704,6 +722,21 @@
 
     if (width > 28) {
       (eventLink || block).appendChild(createProgramEventText(relatedEvent.label));
+    }
+
+    if (useCompactDetailDrawer) {
+      block.setAttribute('role', 'button');
+      block.setAttribute('tabindex', '0');
+      block.setAttribute('aria-label', film.title + ' 관련 행사 정보 열기');
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openDetailChooser(film);
+      });
+      block.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openDetailChooser(film);
+      });
     }
 
     block.addEventListener('mouseenter', () => showProgramEventTooltip(film, relatedEvent, color));
