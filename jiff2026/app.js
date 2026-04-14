@@ -62,6 +62,7 @@
 
   function cacheDom() {
     dom.controls = document.getElementById('controls');
+    dom.logo = document.querySelector('#app-header .logo');
     dom.dayTabsShell = document.getElementById('dayTabsShell');
     dom.dayTabs = document.getElementById('dayTabs');
     dom.venueFilters = document.getElementById('venueFilters');
@@ -430,6 +431,7 @@
 
     dom.searchClearBtn.classList.toggle('hidden', !hasSearchQuery());
     dom.mobileHeaderSearch.classList.toggle('is-open', isMobileSearchVisible);
+    dom.logo.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.mobileSearchToggleBtn.classList.toggle('is-active', isMobileSearchVisible);
     dom.bookmarkBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.bookmarkBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');

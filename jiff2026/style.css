@@ -254,6 +254,14 @@ body {
   white-space: nowrap;
   flex-shrink: 0;
 }
+.bookmark-btn #bmCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 3.5ch;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
 .bookmark-btn:hover { border-color: var(--accent); color: var(--accent); }
 .bookmark-btn.has-items { border-color: var(--accent-dim); color: var(--accent); }
 
@@ -576,6 +584,9 @@ body.compact-viewport .logo {
   line-height: 1;
   font-size: calc(var(--font-logo) * var(--mobile-font-scale));
 }
+body.compact-viewport .logo.hidden-by-search {
+  display: none;
+}
 body.compact-viewport .logo span {
   display: none;
 }
@@ -595,6 +606,7 @@ body.compact-viewport .mobile-header-search {
   transition: max-width 0.22s ease, flex-basis 0.22s ease, opacity 0.18s ease;
 }
 body.compact-viewport .mobile-header-search.is-open {
+  grid-column: 2 / 4;
   flex: 1 1 auto;
   max-width: 100%;
   opacity: 1;
@@ -678,7 +690,7 @@ body.compact-viewport .bookmark-btn {
   grid-row: 1;
   margin-left: 0;
   min-height: 36px;
-  padding: 0 8px;
+  padding: 0 5px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
