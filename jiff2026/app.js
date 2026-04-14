@@ -46,6 +46,9 @@
   renderApp();
   syncCurrentDayUrl();
   queueTimelineScroll(100);
+  requestAnimationFrame(() => {
+    document.body.classList.add('app-ready');
+  });
 
   window.JIFFScheduleApp = {
     state,
@@ -469,8 +472,7 @@
     const shouldShow = !state.mobileNoticeDismissed
       && state.mobileLayout
       && !hasOpenPanel
-      && !hasActiveFilter
-      && state.currentDay === config.defaultState.currentDay;
+      && !hasActiveFilter;
 
     dom.mobileNotice.classList.toggle('visible', shouldShow);
     dom.mobileNotice.setAttribute('aria-hidden', shouldShow ? 'false' : 'true');
@@ -1558,11 +1560,10 @@
 
   function renderMobileDay(dayData) {
     const filmsInActiveGroups = dayData.filter(isFilmInActiveGroup);
-    const visibleFilms = filmsInActiveGroups.filter(matchesMobileVisibleFilters);
     const timelineSource = filmsInActiveGroups.length > 0 ? filmsInActiveGroups : dayData;
     const timelineEnd = getTimelineEnd(timelineSource);
     const venueColumns = getMobileVenueColumns(timelineSource);
-    const filmsByVenue = groupFilmsByVenue(visibleFilms);
+    const filmsByVenue = groupFilmsByVenue(filmsInActiveGroups);
     const totalWidth = getMobileGridWidth(venueColumns.length);
     const totalHeight = getMobileGridHeight(timelineEnd);
 
@@ -1590,7 +1591,7 @@
       });
     });
 
-    if (visibleFilms.length === 0) {
+    if (venueColumns.length === 0 || filmsInActiveGroups.length === 0) {
       renderMobileEmptyState(totalWidth, totalHeight);
     }
 
@@ -1758,8 +1759,13 @@
     block.setAttribute('tabindex', '0');
     block.setAttribute('aria-label', film.title + ' 정보 열기');
 
-    if (height > 40) {
-      block.appendChild(createMobileFilmTitleText(film.title));
+    if (isBookmarked) {
+      block.appendChild(createMobileFilmBookmarkMarker());
+    }
+
+    const titleMode = getMobileFilmTitleMode(film.title, height);
+    if (titleMode) {
+      block.appendChild(createMobileFilmTitleText(film.title, titleMode));
     }
 
     block.addEventListener('click', event => {
@@ -1775,10 +1781,28 @@
     return block;
   }
 
-  function createMobileFilmTitleText(titleText) {
+  function createMobileFilmBookmarkMarker() {
+    const marker = document.createElement('div');
+
+    marker.className = 'mobile-film-bookmark-marker';
+    marker.setAttribute('aria-hidden', 'true');
+    marker.textContent = '★';
+
+    return marker;
+  }
+
+  function getMobileFilmTitleMode(titleText, height) {
+    const normalizedTitle = String(titleText || '').replace(/\s+/g, '');
+
+    if (height > 40) return 'default';
+    if (height >= 28 && normalizedTitle.length > 0 && normalizedTitle.length <= 5) return 'compact';
+    return '';
+  }
+
+  function createMobileFilmTitleText(titleText, mode = 'default') {
     const title = document.createElement('div');
 
-    title.className = 'mobile-film-title-text';
+    title.className = 'mobile-film-title-text' + (mode === 'compact' ? ' is-compact' : '');
     title.textContent = titleText;
 
     return title;
@@ -1859,12 +1883,6 @@
   function matchesActiveListFilters(film) {
     if (state.bookmarkHighlight && !state.bookmarks.has(film.code)) return false;
     if (state.activeSections && !state.activeSections.has(film.section)) return false;
-    if (hasSearchQuery() && !filmMatchesSearch(film)) return false;
-    return true;
-  }
-
-  function matchesMobileVisibleFilters(film) {
-    if (state.bookmarkHighlight && !state.bookmarks.has(film.code)) return false;
     if (hasSearchQuery() && !filmMatchesSearch(film)) return false;
     return true;
   }

@@ -249,6 +249,34 @@ body {
 .bookmark-btn:hover { border-color: var(--accent); color: var(--accent); }
 .bookmark-btn.has-items { border-color: var(--accent-dim); color: var(--accent); }
 
+@media (max-width: 760px), ((max-width: 960px) and (pointer: coarse)) {
+  body:not(.app-ready) #controls {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: min(82vw, 320px);
+    padding: 18px 16px 22px;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 12px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    transform: translateX(calc(-100% - 16px));
+    transition: none;
+    z-index: 230;
+  }
+
+  body:not(.app-ready) .mobile-notice {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%) translateY(18px);
+    transition: none;
+  }
+}
+
 .mobile-header-search,
 .header-view-toggle,
 .header-search-toggle,
@@ -754,6 +782,9 @@ body.mobile-layout .mobile-venue-room {
 body.mobile-layout .mobile-film-title-text {
   font-size: calc(var(--font-small) * var(--mobile-font-scale));
 }
+body.mobile-layout .mobile-film-title-text.is-compact {
+  font-size: calc(var(--font-tiny) * 0.95 * var(--mobile-font-scale));
+}
 body.mobile-layout .mobile-program-event-text {
   font-size: calc(var(--font-tiny) * var(--mobile-font-scale));
 }
@@ -959,6 +990,20 @@ body.mobile-layout .mobile-grid-empty-copy {
 .mobile-film-block:hover::after {
   opacity: 1;
 }
+.mobile-film-bookmark-marker {
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  z-index: 2;
+  font-size: 11px;
+  line-height: 1;
+  color: #ffe28a;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.48);
+  pointer-events: none;
+}
+.mobile-film-block.is-dimmed .mobile-film-bookmark-marker {
+  color: rgba(255,226,138,0.78);
+}
 .mobile-film-title-text,
 .mobile-program-event-text {
   position: relative;
@@ -989,6 +1034,14 @@ body.mobile-layout .mobile-grid-empty-copy {
   max-height: 100%;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 6;
+}
+.mobile-film-title-text.is-compact {
+  display: block;
+  padding: 12px 2px 2px;
+  font-size: calc(var(--font-tiny) * 0.95);
+  line-height: 1;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .mobile-program-event-block {
   position: absolute;
@@ -1119,7 +1172,7 @@ body.mobile-layout .mobile-grid-empty-copy {
 .mobile-notice {
   position: fixed;
   left: 50%;
-  bottom: 16px;
+  bottom: 0;
   width: min(calc(100vw - 24px), 380px);
   transform: translateX(-50%) translateY(18px);
   opacity: 0;
@@ -1139,9 +1192,10 @@ body.has-mobile-panel-open .mobile-notice.visible {
   transform: translateX(-50%) translateY(18px);
 }
 .mobile-notice-card {
-  padding: 14px 16px 16px;
+  min-height: 156px;
+  padding: 18px 16px calc(22px + env(safe-area-inset-bottom));
   border: 1px solid rgba(200,168,75,0.34);
-  border-radius: 18px;
+  border-radius: 18px 18px 0 0;
   background:
     linear-gradient(180deg, rgba(33,33,38,0.96), rgba(20,20,23,0.98));
   box-shadow: 0 16px 36px rgba(0,0,0,0.42);
