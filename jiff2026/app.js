@@ -99,6 +99,7 @@
     dom.detailChooserList = document.getElementById('detailChooserList');
     dom.detailChooserCloseBtn = document.getElementById('detailChooserCloseBtn');
     dom.bookmarksPanel = document.getElementById('bookmarks-panel');
+    dom.bookmarksTitle = document.getElementById('bookmarksTitle');
     dom.bookmarksList = document.getElementById('bookmarks-list');
     dom.bookmarksClearBtn = document.getElementById('bookmarksClearBtn');
     dom.bookmarksDownloadBtn = document.getElementById('bookmarksDownloadBtn');
@@ -972,11 +973,23 @@
   }
 
   function updateBookmarkCount() {
-    dom.bookmarkCount.textContent = state.bookmarks.size > 0 ? '(' + state.bookmarks.size + ')' : '';
-    dom.bookmarkBtn.classList.toggle('has-items', state.bookmarks.size > 0);
+    const bookmarkCount = state.bookmarks.size;
+    const hasBookmarks = bookmarkCount > 0;
+
+    dom.bookmarkCount.textContent = hasBookmarks ? String(bookmarkCount) : '';
+    dom.bookmarkBtn.classList.toggle('has-items', hasBookmarks);
+    dom.bookmarksTitle.textContent = hasBookmarks
+      ? '★ 관심 목록 (' + bookmarkCount + ')'
+      : '★ 관심 목록';
+    dom.bookmarkBtn.setAttribute('aria-label', hasBookmarks
+      ? '관심 목록 열기, ' + bookmarkCount + '개 저장됨'
+      : '관심 목록 열기');
+    dom.bookmarkBtn.setAttribute('title', hasBookmarks
+      ? '관심 목록 ' + bookmarkCount + '개'
+      : '관심 목록');
     renderBookmarkActionState();
 
-    if (state.bookmarks.size === 0 && state.bookmarkHighlight) {
+    if (!hasBookmarks && state.bookmarkHighlight) {
       state.bookmarkHighlight = false;
       renderBookmarkHighlightState();
     }
