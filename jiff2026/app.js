@@ -434,6 +434,8 @@
     dom.mobileHeaderSearch.classList.toggle('is-open', isMobileSearchVisible);
     dom.logo.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.mobileSearchToggleBtn.classList.toggle('is-active', isMobileSearchVisible);
+    dom.mobileDesktopToggleBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
+    dom.mobileDesktopToggleBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');
     dom.bookmarkBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.bookmarkBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');
     dom.mobileSearchClearBtn.setAttribute('aria-label', hasSearchQuery() ? '검색 지우기' : '검색 닫기');

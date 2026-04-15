@@ -733,6 +733,9 @@ body.compact-viewport .bookmark-btn {
 body.compact-viewport .bookmark-btn.hidden-by-search {
   display: none;
 }
+body.compact-viewport .header-view-toggle.hidden-by-search {
+  display: none;
+}
 body.compact-viewport .day-tabs {
   padding-bottom: 2px;
 }
