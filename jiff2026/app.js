@@ -478,7 +478,7 @@
       || hasSearchQuery()
       || state.activeGroups.size !== config.venueGroups.length;
     const shouldShow = !state.mobileNoticeDismissed
-      && state.mobileLayout
+      && state.compactViewport
       && !hasOpenPanel
       && !hasActiveFilter;
 
