@@ -6,12 +6,13 @@
   const MOBILE_NOTICE_STORAGE_KEY = 'jiff2026-mobile-notice-dismissed';
   const LAYOUT_MODE_STORAGE_KEY = 'jiff2026-layout-mode';
   const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
+  const OPEN_ENDED_SLOT_FALLBACK_MINUTES = 120;
 
   if (!dataSource || !config) {
     throw new Error('JIFF schedule assets are missing.');
   }
 
-  const allData = enrichRows(parseCSV(dataSource.csvRaw));
+  const allData = inferOpenEndedRows(enrichRows(parseCSV(dataSource.csvRaw)));
 
   const state = {
     allData,
@@ -967,7 +968,7 @@
       '<div class="bm-color" style="background:' + color + '"></div>',
       '<div class="bm-info">',
       '<div class="bm-title">' + escapeHtml(row.title) + '</div>',
-      '<div class="bm-meta">' + escapeHtml(row.startTime + '–' + row.endTime + ' · ' + venue) + '</div>',
+      '<div class="bm-meta">' + escapeHtml(formatFilmTimeRange(row, '–') + ' · ' + venue) + '</div>',
       '</div>',
       '<button type="button" class="bm-remove" data-bookmark-remove="' + escapeHtml(row.code) + '">✕</button>',
       '</div>',
@@ -1120,7 +1121,7 @@
         row.directorLabel || '',
         row.shorts,
         row.startTime,
-        row.endTime,
+        getFilmDisplayEndTime(row),
         row.code,
         row.meta,
       ];
@@ -1208,7 +1209,7 @@
     dom.detailChooserCloseBtn.setAttribute('aria-label', '상영작 목록 닫기');
     dom.detailChooserCloseBtn.setAttribute('title', '상영작 목록 닫기');
     dom.detailChooserTitle.textContent = film.title || '상영작 목록';
-    dom.detailChooserSubtitle.textContent = [film.startTime + ' - ' + film.endTime, film.venue, film.section]
+    dom.detailChooserSubtitle.textContent = [formatFilmTimeRange(film, ' - '), film.venue, film.section]
       .filter(Boolean)
       .join(' · ');
 
@@ -1231,7 +1232,7 @@
     const isBookmarked = state.bookmarks.has(film.code);
     const primaryActions = [];
     const infoRows = [
-      ['시간', film.startTime && film.endTime ? film.startTime + ' – ' + film.endTime : '—'],
+      ['시간', formatFilmTimeRange(film)],
       ['상영관', film.venue || '—'],
       ['섹션', film.section || '—'],
     ];
@@ -1321,7 +1322,7 @@
     parts.push('<div class="tt-title">' + escapeHtml(film.title) + '</div>');
     parts.push('<div class="tt-meta">');
     parts.push('<strong>상영관</strong> ' + escapeHtml(film.venue) + '<br>');
-    parts.push('<strong>시간</strong> ' + escapeHtml(film.startTime + ' – ' + film.endTime));
+    parts.push('<strong>시간</strong> ' + escapeHtml(formatFilmTimeRange(film)));
     if (film.session) parts.push(' (' + escapeHtml(film.session) + ')');
     if (film.directorLabel) parts.push('<br><strong>감독</strong> ' + escapeHtml(film.directorLabel));
     parts.push('<br>');
@@ -2311,13 +2312,22 @@
 
   function getFilmEndMinutes(film) {
     const startMinutes = timeToMinutes(film.startTime);
-    const endMinutes = timeToMinutes(film.endTime);
+    const endMinutes = timeToMinutes(film.endTime || film.provisionalEndTime);
 
     if (startMinutes === null || endMinutes === null) return null;
 
     return endMinutes <= startMinutes
       ? endMinutes + (24 * 60)
       : endMinutes;
+  }
+
+  function getFilmDisplayEndTime(film) {
+    return film && film.endTime ? film.endTime : '종료 미정';
+  }
+
+  function formatFilmTimeRange(film, separator = ' – ') {
+    if (!film || !film.startTime) return '—';
+    return film.startTime + separator + getFilmDisplayEndTime(film);
   }
 
   function getFollowUpProgramEvent(film) {
@@ -2357,7 +2367,7 @@
       if (fields.length < 8) continue;
 
       const [date, venue, session, section, title, shorts, startTime, endTime, code, meta = ''] = fields;
-      if (!startTime || !endTime) continue;
+      if (!startTime) continue;
 
       rows.push({
         date,
@@ -2374,6 +2384,51 @@
     }
 
     return rows;
+  }
+
+  function inferOpenEndedRows(rows) {
+    const clonedRows = rows.map(row => Object.assign({}, row));
+    const grouped = new Map();
+
+    clonedRows.forEach(row => {
+      const key = row.date + '|' + row.venue;
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(row);
+    });
+
+    grouped.forEach(groupRows => {
+      const sortedRows = groupRows
+        .slice()
+        .sort((left, right) => left.startTime.localeCompare(right.startTime));
+
+      sortedRows.forEach((row, index) => {
+        if (row.endTime || !row.startTime) return;
+
+        const startMinutes = timeToMinutes(row.startTime);
+        const nextRow = sortedRows.slice(index + 1).find(candidate => timeToMinutes(candidate.startTime) !== null);
+        const nextStartMinutes = nextRow ? timeToMinutes(nextRow.startTime) : null;
+        let fallbackEndMinutes = startMinutes + OPEN_ENDED_SLOT_FALLBACK_MINUTES;
+
+        if (nextStartMinutes !== null) {
+          fallbackEndMinutes = Math.min(fallbackEndMinutes, nextStartMinutes);
+        }
+
+        if (fallbackEndMinutes <= startMinutes) {
+          fallbackEndMinutes = startMinutes + OPEN_ENDED_SLOT_FALLBACK_MINUTES;
+        }
+
+        row.provisionalEndTime = minutesToClockLabel(fallbackEndMinutes);
+      });
+    });
+
+    return clonedRows;
+  }
+
+  function minutesToClockLabel(totalMinutes) {
+    const normalizedMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const hours = Math.floor(normalizedMinutes / 60);
+    const minutes = normalizedMinutes % 60;
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
   }
 
   function enrichRows(rows) {
