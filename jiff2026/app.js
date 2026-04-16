@@ -7,6 +7,13 @@
   const LAYOUT_MODE_STORAGE_KEY = 'jiff2026-layout-mode';
   const STAR_SYMBOL_URL = './jiff2026/icons/star.svg#bookmark-star';
   const OPEN_ENDED_SLOT_FALLBACK_MINUTES = 120;
+  const MOBILE_COMPACT_TITLE_PRESERVERS = [
+    { pattern: /^라이브 필름 퍼포먼스/, label: '라이브 필름 퍼포먼스' },
+    { pattern: /^영화보다 낯선 단편 \d+/, extract: true },
+    { pattern: /^하버드 필름 아카이브 단편/, label: '하버드 필름 아카이브 단편' },
+    { pattern: /^박세영, 모든 것은 영화가 된다: 단편$/, label: '박세영, 모든 것은 영화가 된다: 단편' },
+    { pattern: /^수상작 상영 \d+/, extract: true },
+  ];
 
   if (!dataSource || !config) {
     throw new Error('JIFF schedule assets are missing.');
@@ -1866,6 +1873,9 @@
   }
 
   function getMobileCompactFilmTitle(film) {
+    const eventLabelTitle = getMobileCompactEventLabel(film);
+    if (eventLabelTitle) return eventLabelTitle;
+
     const candidates = [];
 
     if (film && film.shorts) {
@@ -1881,6 +1891,21 @@
       const normalizedTitle = String(title || '').replace(/\s+/g, '');
       return normalizedTitle.length > 0 && normalizedTitle.length <= 5;
     }) || '';
+  }
+
+  function getMobileCompactEventLabel(film) {
+    const title = film && film.title ? film.title.trim() : '';
+    if (!title) return '';
+
+    const matchedPreserver = MOBILE_COMPACT_TITLE_PRESERVERS.find(item => item.pattern.test(title));
+    if (!matchedPreserver) return '';
+
+    if (matchedPreserver.extract) {
+      const match = title.match(matchedPreserver.pattern);
+      return match ? match[0] : '';
+    }
+
+    return matchedPreserver.label || '';
   }
 
   function createMobileFilmTitleText(titleText, mode = 'default', height = 0) {
