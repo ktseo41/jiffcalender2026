@@ -3146,6 +3146,33 @@ window.JIFF_SCHEDULE_DIRECTORS = Object.freeze({
         "GOH Seng-hyeon"
       ]
     },
+    "236": {
+      "movieIds": [
+        "8A9EA8C667AA428BA"
+      ],
+      "titles": [
+        "진짜로 일어날지도 몰라 기적 + 마중클래스",
+        "진짜로 일어날지도 몰라 기적"
+      ],
+      "detailMovieId": "8A9EA8C667AA428BA",
+      "detailUrl": "https://www.jeonjufest.kr/db/movieView.asp?idx=8A9EA8C667AA428BA",
+      "detailCandidates": [
+        {
+          "movieId": "8A9EA8C667AA428BA",
+          "title": "진짜로 일어날지도 몰라 기적",
+          "url": "https://www.jeonjufest.kr/db/movieView.asp?idx=8A9EA8C667AA428BA"
+        }
+      ],
+      "hasMultipleDetails": false,
+      "directorDisplays": [
+        "고레에다 히로카즈 / KORE-EDA Hirokazu"
+      ],
+      "directorLabel": "고레에다 히로카즈 / KORE-EDA Hirokazu",
+      "directorNames": [
+        "고레에다 히로카즈",
+        "KORE-EDA Hirokazu"
+      ]
+    },
     "237": {
       "movieIds": [
         "8B16740B7DA8462BA"
@@ -5788,6 +5815,55 @@ window.JIFF_SCHEDULE_DIRECTORS = Object.freeze({
         "Jean-Pierre DARDENNE, Luc DARDENNE",
         "Jean-Pierre DARDENNE",
         "Luc DARDENNE"
+      ]
+    },
+    "347": {
+      "movieIds": [
+        "FCE52B16AB314C22A",
+        "123B70C988F6411E9",
+        "0ADD53EFA41B41BDA"
+      ],
+      "titles": [
+        "단편 모음 + 마중클래스",
+        "가슴의 문을 두드려도",
+        "방구의 무게",
+        "엄마와 포포와 나"
+      ],
+      "detailMovieId": "",
+      "detailUrl": "",
+      "detailCandidates": [
+        {
+          "movieId": "FCE52B16AB314C22A",
+          "title": "가슴의 문을 두드려도",
+          "url": "https://www.jeonjufest.kr/db/movieView.asp?idx=FCE52B16AB314C22A"
+        },
+        {
+          "movieId": "123B70C988F6411E9",
+          "title": "방구의 무게",
+          "url": "https://www.jeonjufest.kr/db/movieView.asp?idx=123B70C988F6411E9"
+        },
+        {
+          "movieId": "0ADD53EFA41B41BDA",
+          "title": "엄마와 포포와 나",
+          "url": "https://www.jeonjufest.kr/db/movieView.asp?idx=0ADD53EFA41B41BDA"
+        }
+      ],
+      "hasMultipleDetails": true,
+      "directorDisplays": [
+        "최윤태 / CHOI Yuntae",
+        "박단비 / PARK Danbi",
+        "류동길 / RYU Donggil"
+      ],
+      "directorLabel": "최윤태 / CHOI Yuntae · 박단비 / PARK Danbi · 류동길 / RYU Donggil",
+      "directorNames": [
+        "최윤태",
+        "CHOI Yuntae",
+        "CHOI Yun-tae",
+        "박단비",
+        "PARK Danbi",
+        "PARK Dan-bi",
+        "류동길",
+        "RYU Donggil"
       ]
     },
     "348": {
