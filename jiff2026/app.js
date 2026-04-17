@@ -2673,7 +2673,7 @@
   }
 
   function enrichRows(rows) {
-    const directorSource = window.JIFF_SCHEDULE_DIRECTORS;
+    const scheduleMetaSource = window.JIFF_SCHEDULE_META;
 
     return rows.map(row => {
       const enrichedRow = Object.assign({}, row);
@@ -2683,9 +2683,9 @@
         enrichedRow.relatedEvent = linkedEvent;
       }
 
-      if (!directorSource) return enrichedRow;
+      if (!scheduleMetaSource) return enrichedRow;
 
-      const metaEntry = getScheduleMetaEntry(enrichedRow, directorSource);
+      const metaEntry = getScheduleMetaEntry(enrichedRow, scheduleMetaSource);
 
       if (!metaEntry) return enrichedRow;
 
@@ -2706,19 +2706,19 @@
     return config.linkedProgramEventsByCode[row.code] || null;
   }
 
-  function getScheduleMetaEntry(row, directorSource) {
-    if (!directorSource) return null;
+  function getScheduleMetaEntry(row, scheduleMetaSource) {
+    if (!scheduleMetaSource) return null;
 
     const candidates = getDirectorLookupCandidates(row);
     const matches = candidates
-      .map(candidate => directorSource.byTitle && directorSource.byTitle[candidate]
-        ? directorSource.byTitle[candidate]
-        : directorSource.byNormalizedTitle
-          ? directorSource.byNormalizedTitle[normalizeSearchValue(candidate)]
+      .map(candidate => scheduleMetaSource.byTitle && scheduleMetaSource.byTitle[candidate]
+        ? scheduleMetaSource.byTitle[candidate]
+        : scheduleMetaSource.byNormalizedTitle
+          ? scheduleMetaSource.byNormalizedTitle[normalizeSearchValue(candidate)]
           : null)
       .filter(Boolean);
-    const codeMatch = directorSource.byCode && directorSource.byCode[row.code]
-      ? directorSource.byCode[row.code]
+    const codeMatch = scheduleMetaSource.byCode && scheduleMetaSource.byCode[row.code]
+      ? scheduleMetaSource.byCode[row.code]
       : null;
 
     if (codeMatch && codeEntryMatchesRowTitle(codeMatch, candidates)) {

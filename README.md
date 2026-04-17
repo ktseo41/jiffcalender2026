@@ -22,8 +22,8 @@
 - `jiff2026/app.js`: 상태, 렌더링, 이벤트 처리
 - `jiff2026/config.js`: 날짜, 보기 밀도, 색상 등 설정
 - `jiff2026/data.js`: 상영 데이터 원본
-- `jiff2026/directors.js`: 감독명 및 상세 링크 메타데이터
-- `scripts/sync-jiff-directors.js`: 상세 링크/감독 정보 동기화 스크립트
+- `jiff2026/schedule-meta.js`: 감독명, 상세 링크, 상세 후보 목록 메타데이터
+- `scripts/sync-jiff-schedule-meta.js`: 상세 링크/감독 정보 동기화 스크립트
 
 ## 이런 때 유용합니다
 
