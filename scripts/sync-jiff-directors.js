@@ -12,6 +12,7 @@ const REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (compatible; jiffcalendar2026/1.0)',
   Accept: 'text/html,application/xhtml+xml',
 };
+const DETAIL_BATCH_DELAY_MS = 300;
 
 main().catch(error => {
   console.error(error.stack || error.message || error);
@@ -128,6 +129,10 @@ async function fetchMovieDetails(movieIds, batchSize) {
 
       console.warn(`Failed to fetch ${movieId}: ${result.reason && result.reason.message ? result.reason.message : result.reason}`);
     });
+
+    if (start + batchSize < movieIds.length) {
+      await delay(DETAIL_BATCH_DELAY_MS);
+    }
   }
 
   return details;
@@ -381,4 +386,8 @@ function decodeHtml(value) {
 
 function buildMovieUrl(movieId) {
   return `${BASE_URL}/db/movieView.asp?idx=${encodeURIComponent(movieId)}`;
+}
+
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
