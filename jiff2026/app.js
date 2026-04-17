@@ -2,6 +2,7 @@
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
   const talkTalkSource = window.JIFF_TALKTALK_DATA || { overview: null, items: [] };
+  const talkTalkRuntimeFactory = window.JIFF_TALKTALK_RUNTIME && window.JIFF_TALKTALK_RUNTIME.createTalkTalkRuntime;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
   const DAY_QUERY_PARAM = 'day';
   const MOBILE_NOTICE_STORAGE_KEY = 'jiff2026-mobile-notice-dismissed';
@@ -21,7 +22,6 @@
   }
 
   const allData = inferOpenEndedRows(enrichRows(parseCSV(dataSource.csvRaw)));
-  const talkTalkItems = Array.isArray(talkTalkSource.items) ? talkTalkSource.items.slice() : [];
 
   const state = {
     allData,
@@ -47,6 +47,13 @@
 
   const dom = {};
   const dayLookup = new Map(config.days.map(day => [day.date, day]));
+  const talkTalk = talkTalkRuntimeFactory
+    ? talkTalkRuntimeFactory({ source: talkTalkSource, dayLookup, normalizeSearchValue, getVenueGroup })
+    : null;
+
+  if (!talkTalk) {
+    throw new Error('JIFF talktalk runtime is missing.');
+  }
 
   cacheDom();
   syncViewportMode();
@@ -516,12 +523,12 @@
   }
 
   function renderTimelineDay(dayData) {
-    const talkTalkDayItems = getCurrentTalkTalkItems();
-    const timelineEnd = getTimelineEnd(dayData.concat(getTalkTalkTimelineRows(talkTalkDayItems)));
+    const talkTalkDayItems = talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery);
+    const timelineEnd = getTimelineEnd(dayData.concat(talkTalk.getTimelineRows(talkTalkDayItems)));
     const totalWidth = getTotalWidth(timelineEnd);
     const venuesByGroup = getVenuesForDay(dayData, talkTalkDayItems);
     const filmsByVenue = groupFilmsByVenue(dayData);
-    const talkTalkByVenue = groupTalkTalkByVenue(talkTalkDayItems);
+    const talkTalkByVenue = talkTalk.groupByVenue(talkTalkDayItems);
 
     dom.venueLabelScroll.innerHTML = '';
     dom.timelineContent.innerHTML = '';
@@ -626,7 +633,7 @@
 
   function createTalkTalkBlock(item, timelineEnd) {
     const startMinutes = timeToMinutes(item.startTime);
-    const endMinutes = getTalkTalkEndMinutes(item);
+    const endMinutes = talkTalk.getEndMinutes(item);
 
     if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
       return null;
@@ -645,7 +652,7 @@
       block.type = 'button';
       block.setAttribute('aria-label', item.title + ' 상세 열기');
     } else {
-      block.href = getTalkTalkPageUrl(item);
+      block.href = talkTalk.getPageUrl(item);
       block.target = '_blank';
       block.rel = 'noopener noreferrer';
       block.setAttribute('aria-label', item.title + ' 전주톡톡 페이지 새 탭 열기');
@@ -653,7 +660,7 @@
     }
 
     label.className = 'talktalk-slot-text';
-    label.textContent = getTalkTalkSlotLabel(item, width);
+    label.textContent = talkTalk.getSlotLabel(item, width);
     block.appendChild(label);
 
     block.addEventListener('mouseenter', () => showTalkTalkTooltip(item));
@@ -1309,12 +1316,12 @@
   }
 
   function renderTalkTalkDetail(item) {
-    const overview = talkTalkSource.overview || {};
-    const pageUrl = getTalkTalkPageUrl(item);
+    const overview = talkTalk.overview || {};
+    const pageUrl = talkTalk.getPageUrl(item);
     const infoRows = [
-      ['일정', formatTalkTalkDayLabel(item) + ' · ' + formatTalkTalkTimeRange(item)],
-      ['장소', getTalkTalkVenue(item)],
-      ['진행', getTalkTalkDurationMinutes(item) + '분'],
+      ['일정', talkTalk.formatDayLabel(item) + ' · ' + talkTalk.formatTimeRange(item)],
+      ['장소', talkTalk.getVenue(item)],
+      ['진행', talkTalk.getDurationMinutes(item) + '분'],
       ['참가비', overview.feeLabel || '12,000원(영화 미포함)'],
       ['게스트', item.guestLabel || '—'],
       ['모더레이터', item.moderator || '—'],
@@ -1324,7 +1331,7 @@
     dom.detailChooserCloseBtn.setAttribute('aria-label', '전주톡톡 상세 닫기');
     dom.detailChooserCloseBtn.setAttribute('title', '전주톡톡 상세 닫기');
     dom.detailChooserTitle.textContent = item.title || item.seriesLabel || '전주톡톡';
-    dom.detailChooserSubtitle.textContent = [item.seriesLabel, getTalkTalkVenue(item)].filter(Boolean).join(' · ');
+    dom.detailChooserSubtitle.textContent = [item.seriesLabel, talkTalk.getVenue(item)].filter(Boolean).join(' · ');
 
     dom.detailChooserList.innerHTML = [
       '<div class="talktalk-detail">',
@@ -1527,14 +1534,14 @@
   function showTalkTalkTooltip(item) {
     if (state.compactViewport) return;
 
-    const overview = talkTalkSource.overview || {};
+    const overview = talkTalk.overview || {};
     const parts = [];
 
     parts.push('<div class="tt-section" style="color:#d7b35a">전주톡톡</div>');
     parts.push('<div class="tt-title">' + escapeHtml(item.title) + '</div>');
     parts.push('<div class="tt-meta">');
-    parts.push('<strong>일정</strong> ' + escapeHtml(formatTalkTalkDayLabel(item) + ' ' + formatTalkTalkTimeRange(item)) + '<br>');
-    parts.push('<strong>장소</strong> ' + escapeHtml(getTalkTalkVenue(item)) + '<br>');
+    parts.push('<strong>일정</strong> ' + escapeHtml(talkTalk.formatDayLabel(item) + ' ' + talkTalk.formatTimeRange(item)) + '<br>');
+    parts.push('<strong>장소</strong> ' + escapeHtml(talkTalk.getVenue(item)) + '<br>');
     parts.push('<strong>게스트</strong> ' + escapeHtml(item.guestLabel || '—') + '<br>');
     parts.push('<strong>모더레이터</strong> ' + escapeHtml(item.moderator || '—'));
     if (item.code) {
@@ -1768,14 +1775,18 @@
 
   function renderMobileDay(dayData) {
     const filmsInActiveGroups = dayData.filter(isFilmInActiveGroup);
-    const talkTalkItemsInActiveGroups = getCurrentTalkTalkItems().filter(isTalkTalkInActiveGroup);
-    const talkTalkTimelineRows = getTalkTalkTimelineRows(talkTalkItemsInActiveGroups);
+    const talkTalkItemsInActiveGroups = talkTalk
+      .getCurrentItems(state.currentDay, state.normalizedSearchQuery)
+      .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
+    const talkTalkTimelineRows = talkTalk.getTimelineRows(talkTalkItemsInActiveGroups);
     const timelineSource = filmsInActiveGroups.concat(talkTalkTimelineRows);
-    const fallbackTimelineSource = dayData.concat(getTalkTalkTimelineRows(getCurrentTalkTalkItems()));
+    const fallbackTimelineSource = dayData.concat(
+      talkTalk.getTimelineRows(talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery))
+    );
     const timelineEnd = getTimelineEnd(timelineSource.length > 0 ? timelineSource : fallbackTimelineSource);
     const venueColumns = getMobileVenueColumns(dayData, talkTalkItemsInActiveGroups);
     const filmsByVenue = groupFilmsByVenue(filmsInActiveGroups);
-    const talkTalkByVenue = groupTalkTalkByVenue(talkTalkItemsInActiveGroups);
+    const talkTalkByVenue = talkTalk.groupByVenue(talkTalkItemsInActiveGroups);
     const totalWidth = getMobileGridWidth(venueColumns.length);
     const totalHeight = getMobileGridHeight(timelineEnd);
 
@@ -2018,7 +2029,7 @@
 
   function createMobileTalkTalkBlock(item, venueIndex, timelineEnd) {
     const startMinutes = timeToMinutes(item.startTime);
-    const endMinutes = getTalkTalkEndMinutes(item);
+    const endMinutes = talkTalk.getEndMinutes(item);
 
     if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
       return null;
@@ -2040,7 +2051,7 @@
     block.setAttribute('aria-label', item.title + ' 상세 열기');
 
     label.className = 'mobile-talktalk-slot-text';
-    label.textContent = getTalkTalkSlotLabel(item, height, true);
+    label.textContent = talkTalk.getSlotLabel(item, height, true);
     block.appendChild(label);
 
     block.addEventListener('click', event => {
@@ -2399,36 +2410,10 @@
     state.allData.forEach(row => {
       if (filmMatchesSearch(row)) dates.add(row.date);
     });
-    talkTalkItems.forEach(item => {
-      if (talkTalkMatchesSearch(item)) dates.add(item.date);
+    talkTalk.items.forEach(item => {
+      if (talkTalk.matchesSearch(item, state.normalizedSearchQuery)) dates.add(item.date);
     });
     return dates;
-  }
-
-  function getCurrentTalkTalkItems() {
-    const items = talkTalkItems.filter(item => item.date === state.currentDay);
-    if (!hasSearchQuery()) return items;
-    return items.filter(talkTalkMatchesSearch);
-  }
-
-  function getTalkTalkTimelineRows(items) {
-    return items.map(item => ({
-      venue: getTalkTalkVenue(item),
-      startTime: item.startTime,
-      endTime: getTalkTalkEndTime(item),
-    }));
-  }
-
-  function groupTalkTalkByVenue(items) {
-    const byVenue = new Map();
-
-    items.forEach(item => {
-      const venue = getTalkTalkVenue(item);
-      if (!byVenue.has(venue)) byVenue.set(venue, []);
-      byVenue.get(venue).push(item);
-    });
-
-    return byVenue;
   }
 
   function groupFilmsByVenue(dayData) {
@@ -2452,7 +2437,7 @@
     });
 
     talkTalkDayItems.forEach(item => {
-      const venue = getTalkTalkVenue(item);
+      const venue = talkTalk.getVenue(item);
       if (!venueToGroup.has(venue)) {
         venueToGroup.set(venue, getVenueGroup(venue));
       }
@@ -2511,28 +2496,6 @@
     ].filter(Boolean).join(' '));
 
     return haystack.includes(state.normalizedSearchQuery);
-  }
-
-  function talkTalkMatchesSearch(item) {
-    if (!hasSearchQuery()) return true;
-
-    const overview = talkTalkSource.overview || {};
-    const haystack = normalizeSearchValue([
-      '전주톡톡',
-      item.seriesLabel,
-      item.title,
-      item.summary,
-      item.guestLabel,
-      item.moderator,
-      item.code,
-      overview.venue,
-    ].filter(Boolean).join(' '));
-
-    return haystack.includes(state.normalizedSearchQuery);
-  }
-
-  function isTalkTalkInActiveGroup(item) {
-    return state.activeGroups.has(getVenueGroup(getTalkTalkVenue(item)).id);
   }
 
   function getResolvedDensityKey() {
@@ -2606,66 +2569,6 @@
   function formatFilmTimeRange(film, separator = ' – ') {
     if (!film || !film.startTime) return '—';
     return film.startTime + separator + getFilmDisplayEndTime(film);
-  }
-
-  function formatTalkTalkTimeRange(item) {
-    if (!item || !item.startTime) return '—';
-    const endTime = getTalkTalkEndTime(item);
-    return endTime ? item.startTime + ' – ' + endTime : item.startTime;
-  }
-
-  function formatTalkTalkDayLabel(item) {
-    const day = item && item.date ? dayLookup.get(item.date) : null;
-    if (!day) return item && item.date ? item.date : '—';
-    return day.label + ' ' + day.sub;
-  }
-
-  function getTalkTalkVenue(item) {
-    return item && item.venue
-      ? item.venue
-      : (talkTalkSource.overview && talkTalkSource.overview.venue ? talkTalkSource.overview.venue : '전주시네마타운 7관');
-  }
-
-  function getTalkTalkPageUrl(item) {
-    if (item && item.pageUrl) return item.pageUrl;
-    return talkTalkSource.overview && talkTalkSource.overview.pageUrl
-      ? talkTalkSource.overview.pageUrl
-      : 'https://jeonjufest.kr/event/jeonju_talktalk.asp';
-  }
-
-  function getTalkTalkDurationMinutes(item) {
-    const itemDuration = item && item.durationMinutes ? Number(item.durationMinutes) : NaN;
-    if (Number.isFinite(itemDuration) && itemDuration > 0) return itemDuration;
-
-    const overviewDuration = talkTalkSource.overview && talkTalkSource.overview.durationMinutes
-      ? Number(talkTalkSource.overview.durationMinutes)
-      : NaN;
-
-    return Number.isFinite(overviewDuration) && overviewDuration > 0
-      ? overviewDuration
-      : 40;
-  }
-
-  function getTalkTalkEndMinutes(item) {
-    const startMinutes = timeToMinutes(item && item.startTime ? item.startTime : '');
-    if (startMinutes === null) return null;
-    return startMinutes + getTalkTalkDurationMinutes(item);
-  }
-
-  function getTalkTalkEndTime(item) {
-    const endMinutes = getTalkTalkEndMinutes(item);
-    return endMinutes === null ? '' : minutesToClockLabel(endMinutes);
-  }
-
-  function getTalkTalkSlotLabel(item, extent, compact = false) {
-    const match = String(item && item.seriesLabel ? item.seriesLabel : '').match(/(\d+)$/);
-    const baseLabel = match ? '톡톡 ' + match[1] : '전주톡톡';
-
-    if (compact) {
-      return match ? '톡톡' + match[1] : '톡톡';
-    }
-
-    return extent >= 84 ? baseLabel : baseLabel.replace(/\s+/g, '');
   }
 
   function getFollowUpProgramEvent(film) {
