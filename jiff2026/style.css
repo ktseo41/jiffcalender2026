@@ -748,6 +748,20 @@ body.compact-viewport .day-tabs-shell {
 body.compact-viewport .day-tab {
   font-size: calc(var(--font-tab) * var(--mobile-font-scale));
 }
+body.compact-viewport .talktalk-detail {
+  gap: 18px;
+}
+body.compact-viewport .talktalk-detail-series {
+  font-size: calc(var(--font-small) * 1.04);
+}
+body.compact-viewport .talktalk-detail-summary,
+body.compact-viewport .talktalk-detail-row-value {
+  font-size: calc(var(--font-body) * 1.14);
+}
+body.compact-viewport .talktalk-detail-row-label,
+body.compact-viewport .talktalk-detail-note {
+  font-size: calc(var(--font-small) * 1.02);
+}
 body.compact-viewport #controls {
   position: fixed;
   top: 0;
@@ -1060,6 +1074,52 @@ body.mobile-layout .mobile-grid-empty-copy {
   color: var(--accent);
 }
 
+/* TALKTALK DETAIL */
+.talktalk-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.talktalk-detail-series {
+  font-size: var(--font-small);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.talktalk-detail-summary {
+  margin: 0;
+  font-size: calc(var(--font-body) * 1.04);
+  line-height: 1.72;
+  color: var(--text);
+}
+.talktalk-detail-grid {
+  display: grid;
+  gap: 12px;
+}
+.talktalk-detail-row {
+  display: grid;
+  gap: 6px;
+}
+.talktalk-detail-row-label {
+  font-size: var(--font-small);
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}
+.talktalk-detail-row-value {
+  font-size: calc(var(--font-body) * 1.08);
+  color: var(--text);
+  line-height: 1.62;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.talktalk-detail-note {
+  margin: 0;
+  font-size: var(--font-small);
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
 /* TIMETABLE AREA */
 #timetable-area {
   flex: 1;
@@ -1310,6 +1370,33 @@ body.mobile-layout .mobile-grid-empty-copy {
   line-height: 1;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+.mobile-talktalk-slot {
+  position: absolute;
+  appearance: none;
+  border-radius: 6px;
+  border: 1px solid rgba(221,188,108,0.62);
+  background: rgba(108,78,24,0.9);
+  color: #f6e7bd;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 3px;
+  text-align: center;
+  z-index: 4;
+}
+.mobile-talktalk-slot-text {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .mobile-program-event-block {
   position: absolute;
@@ -1705,6 +1792,45 @@ body.has-mobile-panel-open .mobile-notice.visible {
   flex: 1;
   position: relative;
   z-index: 1;
+}
+.talktalk-slot {
+  position: absolute;
+  top: 5px;
+  height: calc(var(--row-h) - 10px);
+  appearance: none;
+  border-radius: 3px;
+  border: 1px solid rgba(221,188,108,0.62);
+  background: rgba(112,82,24,0.92);
+  color: #f6e7bd;
+  font-family: inherit;
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 4;
+  text-decoration: none;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+.talktalk-slot:focus-visible {
+  outline: 1px solid rgba(255,243,205,0.92);
+  outline-offset: -2px;
+}
+.talktalk-slot:hover {
+  z-index: 101;
+  border-color: rgba(243,215,141,0.72);
+  background: rgba(124,92,28,0.92);
+}
+.talktalk-slot-text {
+  font-size: var(--font-tiny);
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.38);
+  pointer-events: none;
 }
 .program-event-text {
   font-size: var(--font-tiny);
