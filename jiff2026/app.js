@@ -2,6 +2,7 @@
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
   const talkTalkSource = window.JIFF_TALKTALK_DATA || { overview: null, items: [] };
+  const alleyScreeningSource = window.JIFF_ALLEY_SCREENING_DATA || { overview: null, items: [] };
   const xMajungSource = window.JIFF_X_MAJUNG_DATA || { byCode: {} };
   const talkTalkRuntimeFactory = window.JIFF_TALKTALK_RUNTIME && window.JIFF_TALKTALK_RUNTIME.createTalkTalkRuntime;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
@@ -17,6 +18,19 @@
     { pattern: /^박세영, 모든 것은 영화가 된다: 단편$/, label: '박세영, 모든 것은 영화가 된다: 단편' },
     { pattern: /^수상작 상영 \d+/, extract: true },
   ];
+  const COMBINED_PROGRAM_LANES = Object.freeze([
+    Object.freeze({ id: 'talktalk', label: '전주톡톡', mobileLabel: '톡톡', color: '#637ad0' }),
+    Object.freeze({ id: 'events', label: '특별행사', mobileLabel: '행사', color: '#b98649' }),
+    Object.freeze({ id: 'awards', label: '수상작 상영', mobileLabel: '수상작', color: '#7d8996' }),
+  ]);
+  const ALLEY_SCREENING_COLOR = '#6f8a67';
+  const ALLEY_SCREENING_VENUE_LABELS = Object.freeze({
+    '치평주차장 옆': '치평주차장',
+    '전주중앙교회 광장': '중앙교회',
+    '티아라 네일샵 옆': '티아라 네일샵',
+    '전주 풍남문': '풍남문',
+    '완판본문화관': '완판본',
+  });
 
   if (!dataSource || !config) {
     throw new Error('JIFF schedule assets are missing.');
@@ -27,6 +41,7 @@
   const state = {
     allData,
     currentDay: resolveInitialDay(),
+    viewMode: 'schedule',
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
     searchQuery: '',
@@ -83,12 +98,11 @@
     dom.logo = document.querySelector('#app-header .logo');
     dom.dayTabsShell = document.getElementById('dayTabsShell');
     dom.dayTabs = document.getElementById('dayTabs');
+    dom.viewModeTabs = document.getElementById('viewModeTabs');
     dom.venueFilters = document.getElementById('venueFilters');
     dom.legend = document.getElementById('legend');
     dom.searchInput = document.getElementById('searchInput');
     dom.searchClearBtn = document.getElementById('searchClearBtn');
-    dom.densitySelector = document.getElementById('densitySelector');
-    dom.densityHint = document.getElementById('densityHint');
     dom.mobileHeaderSearch = document.getElementById('mobileHeaderSearch');
     dom.mobileSearchInput = document.getElementById('mobileSearchInput');
     dom.mobileSearchClearBtn = document.getElementById('mobileSearchClearBtn');
@@ -109,6 +123,10 @@
     dom.mobileVenueAxis = document.getElementById('mobile-venue-axis');
     dom.mobileGridContent = document.getElementById('mobile-grid-content');
     dom.mobileVenueCurrent = null;
+    dom.programsView = document.getElementById('programs-view');
+    dom.programsViewContent = document.getElementById('programs-view-content');
+    dom.programsTimelineScroll = null;
+    dom.programsMobileGridScroll = null;
     dom.tooltip = document.getElementById('tooltip');
     dom.overlay = document.getElementById('overlay');
     dom.detailChooserPanel = document.getElementById('detail-chooser-panel');
@@ -136,7 +154,9 @@
     dom.mobileDesktopToggleBtn.addEventListener('click', toggleDesktopViewMode);
     dom.mobileSearchToggleBtn.addEventListener('click', openMobileHeaderSearch);
     dom.mobileControlsToggleBtn.addEventListener('click', toggleMobileControls);
-    dom.densitySelector.addEventListener('click', handleDensityClick);
+    if (dom.viewModeTabs) {
+      dom.viewModeTabs.addEventListener('click', handleViewModeClick);
+    }
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
@@ -158,10 +178,10 @@
     buildDayTabs();
     buildVenueFilters();
     buildLegend();
-    buildDensityControls();
     renderMobileNotice();
     renderMobileControlsState();
     renderViewportToggle();
+    renderViewModeTabs();
     updateDayTabOverflowHints();
   }
 
@@ -229,22 +249,6 @@
     dom.legend.appendChild(fragment);
   }
 
-  function buildDensityControls() {
-    const fragment = document.createDocumentFragment();
-
-    config.densityModes.forEach(mode => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'density-btn';
-      button.dataset.density = mode.id;
-      button.textContent = mode.label;
-      fragment.appendChild(button);
-    });
-
-    dom.densitySelector.innerHTML = '';
-    dom.densitySelector.appendChild(fragment);
-  }
-
   function handleDayTabClick(event) {
     const button = event.target.closest('[data-day]');
     if (!button) return;
@@ -271,10 +275,10 @@
     setSearchQuery(event.target.value);
   }
 
-  function handleDensityClick(event) {
-    const button = event.target.closest('[data-density]');
-    if (!button) return;
-    setDensityMode(button.dataset.density);
+  function handleViewModeClick(event) {
+    const button = event.target.closest('[data-view-mode]');
+    if (!button || button.disabled) return;
+    setViewMode(button.dataset.viewMode);
   }
 
   function handleBookmarkListClick(event) {
@@ -375,13 +379,26 @@
 
   function renderControls() {
     renderDayTabState();
+    renderViewModeTabs();
     renderVenueFilterState();
     renderLegendState();
     renderSearchControls();
-    renderDensityControls();
     renderBookmarkHighlightState();
     renderMobileControlsState();
     renderViewportToggle();
+  }
+
+  function renderViewModeTabs() {
+    if (!dom.viewModeTabs) return;
+
+    document.body.classList.toggle('programs-view-mode', state.viewMode === 'programs');
+    document.body.classList.toggle('combined-view-mode', state.viewMode === 'combined');
+
+    dom.viewModeTabs.querySelectorAll('[data-view-mode]').forEach(button => {
+      const isActive = button.dataset.viewMode === state.viewMode;
+      button.classList.toggle('active', isActive);
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
   }
 
   function renderDayTabState() {
@@ -473,18 +490,6 @@
     dom.mobileDesktopToggleBtn.setAttribute('title', nextModeLabel + ' 보기로 전환');
   }
 
-  function renderDensityControls() {
-    dom.densitySelector.querySelectorAll('[data-density]').forEach(button => {
-      button.classList.toggle('active', button.dataset.density === state.densityMode);
-    });
-
-    if (dom.densityHint) {
-      dom.densityHint.textContent = state.densityMode === 'auto'
-        ? '현재 ' + getDensityLabel(state.resolvedDensityKey)
-        : getDensityLabel(state.resolvedDensityKey) + ' 고정';
-    }
-  }
-
   function renderMobileNotice() {
     if (!dom.mobileNotice) return;
 
@@ -515,20 +520,320 @@
   function renderDay() {
     const dayData = getCurrentDayData();
 
-    if (state.mobileLayout) {
-      renderMobileDay(dayData);
+    if (state.viewMode === 'programs') {
+      renderProgramsTimelineDay(dayData);
       return;
     }
 
-    renderTimelineDay(dayData);
+    if (state.mobileLayout) {
+      renderMobileDay(dayData);
+    } else {
+      renderTimelineDay(dayData);
+    }
+
+    clearProgramsView();
   }
 
-  function renderTimelineDay(dayData) {
-    const talkTalkDayItems = talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery);
-    const timelineEnd = getTimelineEnd(dayData.concat(talkTalk.getTimelineRows(talkTalkDayItems)));
+  function clearProgramsView() {
+    dom.programsTimelineScroll = null;
+    dom.programsMobileGridScroll = null;
+    if (dom.programsViewContent) {
+      dom.programsViewContent.innerHTML = '';
+    }
+  }
+
+  function renderProgramsTimelineDay(dayData) {
+    const lanes = getCombinedProgramLanes(dayData);
+    const totalItems = lanes.reduce((count, lane) => count + lane.items.length, 0);
+
+    dom.programsViewContent.innerHTML = '';
+    dom.programsViewContent.classList.toggle('is-combined-mode', state.viewMode === 'combined');
+    dom.programsViewContent.classList.toggle('is-programs-mode', state.viewMode === 'programs');
+
+    if (lanes.length === 0) {
+      dom.programsViewContent.appendChild(createProgramsEmptyState());
+      return;
+    }
+
+    dom.programsViewContent.appendChild(createProgramsTimelineHeader(totalItems));
+    dom.programsViewContent.appendChild(
+      state.mobileLayout
+        ? createMobileProgramsTimeline(lanes)
+        : createDesktopProgramsTimeline(lanes)
+    );
+  }
+
+  function createProgramsEmptyState() {
+    const emptyState = document.createElement('div');
+
+    emptyState.className = 'programs-empty';
+    emptyState.innerHTML = [
+      '<div class="programs-empty-card">',
+      '<div class="programs-empty-title">조건에 맞는 별도 프로그램이 없어요.</div>',
+      '<div class="programs-empty-copy">검색어를 지우거나 상영관, 섹션, 관심 필터를 조금 넓혀 보세요.</div>',
+      '</div>',
+    ].join('');
+
+    return emptyState;
+  }
+
+  function createProgramsTimelineHeader(totalItems) {
+    const header = document.createElement('div');
+    const title = document.createElement('h3');
+    const meta = document.createElement('div');
+
+    header.className = 'programs-timeline-header';
+    title.className = 'programs-timeline-title';
+    title.textContent = '별도 프로그램';
+    meta.className = 'programs-timeline-meta';
+    meta.textContent = totalItems + '건';
+
+    header.appendChild(title);
+    header.appendChild(meta);
+    return header;
+  }
+
+  function createDesktopProgramsTimeline(lanes) {
+    const timelineRows = getCombinedProgramTimelineRows(lanes);
+    const timelineEnd = getTimelineEnd(timelineRows);
     const totalWidth = getTotalWidth(timelineEnd);
-    const venuesByGroup = getVenuesForDay(dayData, talkTalkDayItems);
-    const filmsByVenue = groupFilmsByVenue(dayData);
+    const area = document.createElement('div');
+    const labels = document.createElement('div');
+    const spacer = document.createElement('div');
+    const labelScroll = document.createElement('div');
+    const scroll = document.createElement('div');
+    const timeAxis = document.createElement('div');
+    const content = document.createElement('div');
+    const gridLines = document.createElement('div');
+
+    area.className = 'programs-timetable-area';
+    labels.className = 'programs-venue-labels';
+    spacer.className = 'programs-venue-label-spacer';
+    labelScroll.className = 'programs-venue-label-scroll';
+    scroll.className = 'programs-timeline-scroll';
+    timeAxis.className = 'programs-time-axis';
+    content.className = 'programs-timeline-content';
+    content.style.width = totalWidth + 'px';
+    timeAxis.style.width = totalWidth + 'px';
+    gridLines.className = 'programs-grid-lines';
+    gridLines.style.width = totalWidth + 'px';
+    content.appendChild(gridLines);
+
+    renderProgramsDesktopTimeAxis(timeAxis, gridLines, timelineEnd);
+
+    lanes.forEach(lane => {
+      labelScroll.appendChild(createCombinedProgramLaneLabel(lane));
+      content.appendChild(createCombinedProgramLaneRow(lane, totalWidth, timelineEnd));
+    });
+
+    scroll.addEventListener('scroll', () => {
+      labelScroll.scrollTop = scroll.scrollTop;
+    }, { passive: true });
+
+    labels.appendChild(spacer);
+    labels.appendChild(labelScroll);
+    scroll.appendChild(timeAxis);
+    scroll.appendChild(content);
+    area.appendChild(labels);
+    area.appendChild(scroll);
+
+    requestAnimationFrame(() => {
+      const fallbackScrollLeft = timeToX(config.timeRange.initialScroll) - 20;
+      scroll.scrollLeft = state.viewMode === 'combined' && dom.timelineScroll
+        ? dom.timelineScroll.scrollLeft
+        : fallbackScrollLeft;
+    });
+
+    dom.programsTimelineScroll = scroll;
+
+    return area;
+  }
+
+  function renderProgramsDesktopTimeAxis(timeAxis, gridLines, timelineEnd) {
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
+      const x = timeToX(minutes);
+      const isHour = minutes % 60 === 0;
+      const mark = document.createElement('div');
+      const line = document.createElement('div');
+
+      mark.className = 'time-mark' + (isHour ? ' full-hour' : '');
+      mark.style.left = x + 'px';
+      mark.textContent = formatAxisTime(minutes);
+      timeAxis.appendChild(mark);
+
+      line.className = isHour ? 'grid-line-hour' : 'grid-line-half';
+      line.style.left = x + 'px';
+      gridLines.appendChild(line);
+    }
+  }
+
+  function createMobileProgramsTimeline(lanes) {
+    const columns = getMobileCombinedProgramColumns(lanes);
+    const timelineRows = getCombinedProgramTimelineRows(lanes);
+    const timelineEnd = getTimelineEnd(timelineRows);
+    const totalWidth = getMobileGridWidth(columns.length);
+    const totalHeight = getMobileGridHeight(timelineEnd);
+    const shell = document.createElement('div');
+    const timeLabels = document.createElement('div');
+    const spacer = document.createElement('div');
+    const timeLabelScroll = document.createElement('div');
+    const gridScroll = document.createElement('div');
+    const venueAxis = document.createElement('div');
+    const gridContent = document.createElement('div');
+    const gridLines = document.createElement('div');
+
+    shell.className = 'programs-mobile-schedule';
+    timeLabels.className = 'programs-mobile-time-labels';
+    spacer.className = 'mobile-time-label-spacer programs-mobile-time-label-spacer';
+    timeLabelScroll.className = 'programs-mobile-time-label-scroll';
+    gridScroll.className = 'programs-mobile-grid-scroll';
+    venueAxis.className = 'programs-mobile-venue-axis';
+    gridContent.className = 'programs-mobile-grid-content';
+    gridContent.style.width = totalWidth + 'px';
+    gridContent.style.height = totalHeight + 'px';
+    venueAxis.style.width = totalWidth + 'px';
+    gridLines.className = 'programs-mobile-grid-lines';
+    gridLines.style.width = totalWidth + 'px';
+    gridLines.style.height = totalHeight + 'px';
+    gridContent.appendChild(gridLines);
+
+    renderProgramsMobileTimeAxis(timeLabelScroll, timelineEnd, totalHeight);
+    renderProgramsMobileVenueAxis(venueAxis, columns);
+    renderProgramsMobileGridLines(gridLines, columns.length, timelineEnd);
+
+    columns.forEach((entry, index) => {
+      entry.lane.items.forEach(programEntry => {
+        const block = createMobileCombinedProgramBlock(programEntry, entry.lane, index, timelineEnd);
+        if (block) gridContent.appendChild(block);
+      });
+    });
+
+    gridScroll.addEventListener('scroll', () => {
+      timeLabelScroll.scrollTop = gridScroll.scrollTop;
+    }, { passive: true });
+
+    timeLabels.appendChild(spacer);
+    timeLabels.appendChild(timeLabelScroll);
+    gridScroll.appendChild(venueAxis);
+    gridScroll.appendChild(gridContent);
+    shell.appendChild(timeLabels);
+    shell.appendChild(gridScroll);
+
+    requestAnimationFrame(() => {
+      if (state.viewMode === 'combined' && dom.mobileGridScroll) {
+        gridScroll.scrollLeft = dom.mobileGridScroll.scrollLeft;
+      }
+    });
+
+    dom.programsMobileGridScroll = gridScroll;
+
+    return shell;
+  }
+
+  function renderProgramsMobileTimeAxis(timeLabelScroll, timelineEnd, totalHeight) {
+    const rail = document.createElement('div');
+
+    rail.className = 'mobile-time-rail';
+    rail.style.height = totalHeight + 'px';
+
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
+      const mark = document.createElement('div');
+      const isHour = minutes % 60 === 0;
+
+      mark.className = 'mobile-time-mark' + (isHour ? ' full-hour' : '');
+      mark.style.top = mobileTimeToY(minutes) + 'px';
+      mark.textContent = formatAxisTime(minutes);
+      rail.appendChild(mark);
+    }
+
+    timeLabelScroll.appendChild(rail);
+  }
+
+  function renderProgramsMobileVenueAxis(venueAxis, columns) {
+    const columnWidth = getMobileVenueColumnWidth();
+    const groups = [];
+    let activeGroup = null;
+
+    columns.forEach((entry, index) => {
+      const parts = getMobileColumnHeaderParts(entry);
+
+      if (!activeGroup || activeGroup.label !== parts.primary) {
+        activeGroup = {
+          label: parts.primary,
+          startIndex: index,
+          count: 1,
+        };
+        groups.push(activeGroup);
+      } else {
+        activeGroup.count += 1;
+      }
+    });
+
+    groups.forEach(group => {
+      const groupHead = document.createElement('div');
+
+      groupHead.className = 'mobile-venue-grouphead';
+      groupHead.style.left = String(group.startIndex * columnWidth) + 'px';
+      groupHead.style.width = String(group.count * columnWidth) + 'px';
+      groupHead.textContent = group.label;
+      venueAxis.appendChild(groupHead);
+    });
+
+    columns.forEach((entry, index) => {
+      const header = document.createElement('div');
+      const secondary = document.createElement('div');
+      const parts = getMobileColumnHeaderParts(entry);
+
+      header.className = 'mobile-venue-roomhead';
+      header.style.left = String(index * columnWidth) + 'px';
+      header.style.width = String(columnWidth) + 'px';
+
+      secondary.className = 'mobile-venue-room';
+      secondary.textContent = parts.secondary || parts.primary;
+      header.appendChild(secondary);
+      venueAxis.appendChild(header);
+    });
+  }
+
+  function renderProgramsMobileGridLines(gridLines, venueCount, timelineEnd) {
+    const columnWidth = getMobileVenueColumnWidth();
+
+    for (let minutes = Math.ceil(config.timeRange.start / 30) * 30; minutes <= timelineEnd; minutes += 30) {
+      const line = document.createElement('div');
+      const isHour = minutes % 60 === 0;
+
+      line.className = isHour ? 'mobile-grid-line-hour' : 'mobile-grid-line-half';
+      line.style.top = mobileTimeToY(minutes) + 'px';
+      gridLines.appendChild(line);
+    }
+
+    for (let index = 1; index < venueCount; index += 1) {
+      const line = document.createElement('div');
+
+      line.className = 'mobile-grid-line-venue';
+      line.style.left = String(index * columnWidth) + 'px';
+      gridLines.appendChild(line);
+    }
+  }
+
+
+  function renderTimelineDay(dayData) {
+    const scheduleRows = getScheduleRowsForCurrentMode(dayData);
+    const combinedProgramLanes = state.viewMode === 'combined'
+      ? getCombinedProgramLanes(dayData)
+      : [];
+    const talkTalkDayItems = state.viewMode === 'combined'
+      ? []
+      : talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery);
+    const timelineTalkTalkItems = talkTalkDayItems;
+    const timelineEnd = getTimelineEnd(
+      scheduleRows
+        .concat(talkTalk.getTimelineRows(timelineTalkTalkItems))
+        .concat(getCombinedProgramTimelineRows(combinedProgramLanes))
+    );
+    const totalWidth = getTotalWidth(timelineEnd);
+    const venuesByGroup = getVenuesForDay(scheduleRows, talkTalkDayItems);
+    const filmsByVenue = groupFilmsByVenue(scheduleRows);
     const talkTalkByVenue = talkTalk.groupByVenue(talkTalkDayItems);
 
     dom.venueLabelScroll.innerHTML = '';
@@ -549,6 +854,10 @@
       if (!state.activeGroups.has(group.id) || venues.length === 0) return;
       renderVenueGroup(group, venues, filmsByVenue, talkTalkByVenue, totalWidth, timelineEnd);
     });
+
+    if (combinedProgramLanes.length > 0) {
+      renderCombinedProgramLanes(combinedProgramLanes, totalWidth, timelineEnd);
+    }
 
     syncLabelScroll();
   }
@@ -593,6 +902,52 @@
     });
   }
 
+  function renderCombinedProgramLanes(lanes, totalWidth, timelineEnd) {
+    const labelHeader = document.createElement('div');
+    const timelineHeader = document.createElement('div');
+
+    labelHeader.className = 'venue-group-header';
+    labelHeader.textContent = '별도 프로그램';
+    dom.venueLabelScroll.appendChild(labelHeader);
+
+    timelineHeader.className = 'venue-group-header-timeline';
+    timelineHeader.style.width = totalWidth + 'px';
+    dom.timelineContent.appendChild(timelineHeader);
+
+    lanes.forEach(lane => {
+      dom.venueLabelScroll.appendChild(createCombinedProgramLaneLabel(lane));
+      dom.timelineContent.appendChild(createCombinedProgramLaneRow(lane, totalWidth, timelineEnd));
+    });
+  }
+
+  function createCombinedProgramLaneLabel(lane) {
+    const label = document.createElement('div');
+
+    label.className = 'venue-label program-lane-label';
+    label.textContent = lane.label;
+
+    return label;
+  }
+
+  function createCombinedProgramLaneRow(lane, totalWidth, timelineEnd) {
+    const row = document.createElement('div');
+
+    row.className = 'row-wrapper program-lane-row';
+    row.style.width = totalWidth + 'px';
+
+    lane.items.forEach(entry => {
+      const block = entry.kind === 'talktalk'
+        ? createTalkTalkBlock(entry.item, timelineEnd, 'talktalk-slot program-lane-block program-lane-block-talktalk')
+        : entry.kind === 'alley'
+          ? createCombinedAlleyProgramBlock(entry.item, lane, timelineEnd)
+          : createCombinedProgramRowBlock(entry.row, lane, timelineEnd);
+
+      if (block) row.appendChild(block);
+    });
+
+    return row;
+  }
+
   function createVenueLabel(venue, group) {
     const label = document.createElement('div');
     label.className = 'venue-label';
@@ -632,7 +987,7 @@
     return row;
   }
 
-  function createTalkTalkBlock(item, timelineEnd) {
+  function createTalkTalkBlock(item, timelineEnd, className = 'talktalk-slot') {
     const startMinutes = timeToMinutes(item.startTime);
     const endMinutes = talkTalk.getEndMinutes(item);
 
@@ -646,7 +1001,7 @@
     const block = document.createElement(useCompactDetailDrawer ? 'button' : 'a');
     const label = document.createElement('span');
 
-    block.className = 'talktalk-slot';
+    block.className = className;
     block.style.left = x + 'px';
     block.style.width = width + 'px';
     if (useCompactDetailDrawer) {
@@ -674,6 +1029,117 @@
         openTalkTalkDetail(item);
       });
     }
+
+    return block;
+  }
+
+  function createCombinedProgramRowBlock(row, lane, timelineEnd) {
+    const startMinutes = timeToMinutes(row.startTime);
+    const endMinutes = getFilmEndMinutes(row);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const x = timeToX(startMinutes);
+    const width = Math.max(18, timeToX(Math.min(endMinutes, timelineEnd)) - x);
+    const isBookmarked = state.bookmarks.has(row.code);
+    const isSearchMatch = filmMatchesSearch(row);
+    const isDimmed = shouldDimFilm(row, isBookmarked, isSearchMatch);
+    const block = document.createElement('div');
+    const detailLink = row.detailUrl ? createFilmDetailLink(row) : null;
+
+    block.className = 'program-lane-block';
+    block.style.left = x + 'px';
+    block.style.width = width + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, isBookmarked);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, isBookmarked);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.style.boxShadow = getCombinedProgramShadow(isBookmarked, isSearchMatch);
+
+    if (detailLink) {
+      block.appendChild(detailLink);
+    }
+
+    if (width > 28) {
+      const title = document.createElement('div');
+      title.className = 'program-lane-text';
+      title.textContent = row.title;
+      (detailLink || block).appendChild(title);
+    }
+
+    if (row.hasMultipleDetails) {
+      block.setAttribute('role', 'button');
+      block.setAttribute('tabindex', '0');
+      block.setAttribute('aria-label', row.title + ' 상세 열기');
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openDetailChooser(row);
+      });
+      block.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        openDetailChooser(row);
+      });
+    } else if (!row.detailUrl) {
+      block.classList.add('no-detail-action');
+    }
+
+    block.addEventListener('mouseenter', () => showTooltip(row, lane.color));
+    block.addEventListener('mousemove', moveTooltip);
+    block.addEventListener('mouseleave', hideTooltip);
+
+    return block;
+  }
+
+  function createCombinedAlleyProgramBlock(item, lane, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getAlleyScreeningEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const x = timeToX(startMinutes);
+    const width = Math.max(18, timeToX(Math.min(endMinutes, timelineEnd)) - x);
+    const isSearchMatch = matchesAlleyScreeningSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const useCompactDetailDrawer = state.compactViewport;
+    const block = document.createElement(useCompactDetailDrawer ? 'button' : 'a');
+
+    block.className = 'program-lane-block';
+    block.style.left = x + 'px';
+    block.style.width = width + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+
+    if (useCompactDetailDrawer) {
+      block.type = 'button';
+      block.setAttribute('aria-label', item.title + ' 정보 열기');
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openAlleyProgramDetail(item);
+      });
+    } else {
+      block.href = getAlleyScreeningPageUrl(item);
+      block.target = '_blank';
+      block.rel = 'noopener noreferrer';
+      block.setAttribute('aria-label', item.title + ' 공식 페이지 새 탭 열기');
+      block.setAttribute('title', item.title + ' 공식 페이지 새 탭 열기');
+    }
+
+    if (width > 28) {
+      const title = document.createElement('div');
+      title.className = 'program-lane-text';
+      title.textContent = item.title;
+      block.appendChild(title);
+    }
+
+    block.addEventListener('mouseenter', () => showAlleyProgramTooltip(item, lane.color));
+    block.addEventListener('mousemove', moveTooltip);
+    block.addEventListener('mouseleave', hideTooltip);
 
     return block;
   }
@@ -955,6 +1421,42 @@
 
     if (state.bookmarkHighlight && isBookmarked) {
       return '0 0 0 2px #ffd70088, 0 2px 8px rgba(0,0,0,0.5)';
+    }
+
+    return '';
+  }
+
+  function getCombinedProgramBackground(color, isSearchMatch, isDimmed, isBookmarked) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return color + '34';
+    }
+
+    if (state.bookmarkHighlight && isBookmarked) {
+      return color + '30';
+    }
+
+    return color + (isDimmed ? '10' : '20');
+  }
+
+  function getCombinedProgramBorderColor(color, isSearchMatch, isDimmed, isBookmarked) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '#f0d58a';
+    }
+
+    if (state.bookmarkHighlight && isBookmarked) {
+      return '#ffd700';
+    }
+
+    return color + (isDimmed ? '4a' : 'c2');
+  }
+
+  function getCombinedProgramShadow(isBookmarked, isSearchMatch) {
+    if (hasSearchQuery() && isSearchMatch) {
+      return '0 0 0 1px rgba(240,213,138,0.4), 0 6px 14px rgba(0,0,0,0.2)';
+    }
+
+    if (state.bookmarkHighlight && isBookmarked) {
+      return '0 0 0 1px rgba(255,215,0,0.48)';
     }
 
     return '';
@@ -1262,6 +1764,19 @@
     syncOverlayState();
   }
 
+  function openAlleyProgramDetail(item) {
+    if (!item) return;
+
+    closeMobileControls();
+    closeBookmarksPanel();
+    hideTooltip();
+    renderAlleyProgramDetail(item);
+    dom.detailChooserPanel.dataset.filmCode = '';
+    dom.detailChooserPanel.setAttribute('aria-hidden', 'false');
+    dom.detailChooserPanel.classList.add('open');
+    syncOverlayState();
+  }
+
   function closeDetailChooser() {
     dom.detailChooserPanel.classList.remove('open');
     dom.detailChooserPanel.setAttribute('aria-hidden', 'true');
@@ -1341,6 +1856,45 @@
         ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">상세보기 (새 탭 열기)</a></div>'
         : '',
       '<p class="talktalk-detail-summary">' + escapeHtml(item.summary || '') + '</p>',
+      '<div class="talktalk-detail-grid">',
+      infoRows.map(row => [
+        '<div class="talktalk-detail-row">',
+        '<span class="talktalk-detail-row-label">' + escapeHtml(row[0]) + '</span>',
+        '<span class="talktalk-detail-row-value">' + escapeHtml(row[1]) + '</span>',
+        '</div>',
+      ].join('')).join(''),
+      '</div>',
+      overview.note
+        ? '<p class="talktalk-detail-note">' + escapeHtml(overview.note) + '</p>'
+        : '',
+      '</div>',
+    ].join('');
+  }
+
+  function renderAlleyProgramDetail(item) {
+    const overview = alleyScreeningSource.overview || {};
+    const pageUrl = getAlleyScreeningPageUrl(item);
+    const infoRows = [
+      ['일정', formatDayLabel(item.date) + ' · ' + formatAlleyScreeningTimeRange(item)],
+      ['장소', item.venue || '—'],
+      ['프로그램', overview.label || '골목상영'],
+      ['참가비', overview.feeLabel || '무료'],
+      ['비고', getAlleyScreeningTagsText(item) || '—'],
+      ['참석자', item.guestLabel || '—'],
+    ];
+
+    dom.detailChooserCloseBtn.setAttribute('aria-label', '골목상영 상세 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', '골목상영 상세 닫기');
+    dom.detailChooserTitle.textContent = item.title || overview.label || '골목상영';
+    dom.detailChooserSubtitle.textContent = [overview.label || '골목상영', item.venue].filter(Boolean).join(' · ');
+
+    dom.detailChooserList.innerHTML = [
+      '<div class="talktalk-detail">',
+      '<div class="talktalk-detail-series">' + escapeHtml(overview.label || '골목상영') + '</div>',
+      pageUrl
+        ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">공식 페이지 (새 탭 열기)</a></div>'
+        : '',
+      '<p class="talktalk-detail-summary">' + escapeHtml(overview.description || '전주 곳곳의 야외 공간에서 진행되는 무료 상영 프로그램입니다.') + '</p>',
       '<div class="talktalk-detail-grid">',
       infoRows.map(row => [
         '<div class="talktalk-detail-row">',
@@ -1520,6 +2074,33 @@
     positionTooltip();
   }
 
+  function showAlleyProgramTooltip(item, color) {
+    if (state.compactViewport) return;
+
+    const parts = [];
+
+    parts.push('<div class="tt-section" style="color:' + color + '">골목상영</div>');
+    parts.push('<div class="tt-title">' + escapeHtml(item.title) + '</div>');
+    parts.push('<div class="tt-meta">');
+    parts.push('<strong>장소</strong> ' + escapeHtml(item.venue) + '<br>');
+    parts.push('<strong>시간</strong> ' + escapeHtml(formatAlleyScreeningTimeRange(item)));
+    parts.push('</div>');
+
+    if (item.guestLabel) {
+      parts.push('<div class="tt-shorts">👥 참석자 · ' + escapeHtml(item.guestLabel) + '</div>');
+    }
+
+    if (getAlleyScreeningTagsText(item)) {
+      parts.push('<div class="tt-shorts">📝 ' + escapeHtml(getAlleyScreeningTagsText(item)) + '</div>');
+    }
+
+    parts.push('<div class="tt-bookmark-hint">클릭 시 공식 페이지 새 탭 열기</div>');
+
+    dom.tooltip.innerHTML = parts.join('');
+    dom.tooltip.classList.add('visible');
+    positionTooltip();
+  }
+
   function showProgramEventTooltip(film, relatedEvent, color) {
     if (state.compactViewport) return;
 
@@ -1620,6 +2201,19 @@
 
     state.densityMode = mode;
     rerenderDayWithDensity(getResolvedDensityKey());
+  }
+
+  function setViewMode(mode) {
+    if (!mode || mode === state.viewMode) return;
+    if (mode !== 'schedule' && mode !== 'combined' && mode !== 'programs') return;
+
+    state.viewMode = mode;
+    closeOpenPanels();
+    renderApp();
+
+    if (!state.mobileLayout) {
+      queueTimelineScroll(50);
+    }
   }
 
   function rerenderDayWithDensity(nextDensityKey) {
@@ -1780,10 +2374,18 @@
   }
 
   function queueTimelineScroll(delay) {
-    if (state.mobileLayout) return;
-
     window.setTimeout(() => {
-      dom.timelineScroll.scrollLeft = timeToX(config.timeRange.initialScroll) - 20;
+      const nextScrollLeft = timeToX(config.timeRange.initialScroll) - 20;
+
+      if (!state.mobileLayout && dom.timelineScroll) {
+        dom.timelineScroll.scrollLeft = nextScrollLeft;
+      }
+
+      if (!state.mobileLayout && dom.programsTimelineScroll) {
+        dom.programsTimelineScroll.scrollLeft = state.viewMode === 'combined' && dom.timelineScroll
+          ? dom.timelineScroll.scrollLeft
+          : nextScrollLeft;
+      }
     }, delay);
   }
 
@@ -1797,17 +2399,27 @@
   }
 
   function renderMobileDay(dayData) {
-    const filmsInActiveGroups = dayData.filter(isFilmInActiveGroup);
-    const talkTalkItemsInActiveGroups = talkTalk
-      .getCurrentItems(state.currentDay, state.normalizedSearchQuery)
-      .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
-    const talkTalkTimelineRows = talkTalk.getTimelineRows(talkTalkItemsInActiveGroups);
-    const timelineSource = filmsInActiveGroups.concat(talkTalkTimelineRows);
-    const fallbackTimelineSource = dayData.concat(
-      talkTalk.getTimelineRows(talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery))
+    const scheduleRows = getScheduleRowsForCurrentMode(dayData);
+    const filmsInActiveGroups = scheduleRows.filter(isFilmInActiveGroup);
+    const combinedProgramLanes = state.viewMode === 'combined'
+      ? getCombinedProgramLanes(dayData)
+      : [];
+    const talkTalkItemsInActiveGroups = state.viewMode === 'combined'
+      ? []
+      : talkTalk
+        .getCurrentItems(state.currentDay, state.normalizedSearchQuery)
+        .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
+    const timelineTalkTalkItems = talkTalkItemsInActiveGroups;
+    const talkTalkTimelineRows = talkTalk.getTimelineRows(timelineTalkTalkItems);
+    const combinedTimelineRows = getCombinedProgramTimelineRows(combinedProgramLanes);
+    const timelineSource = filmsInActiveGroups.concat(talkTalkTimelineRows, combinedTimelineRows);
+    const fallbackTimelineSource = scheduleRows.concat(
+      talkTalk.getTimelineRows(talkTalkItemsInActiveGroups),
+      combinedTimelineRows
     );
     const timelineEnd = getTimelineEnd(timelineSource.length > 0 ? timelineSource : fallbackTimelineSource);
-    const venueColumns = getMobileVenueColumns(dayData, talkTalkItemsInActiveGroups);
+    const venueColumns = getMobileVenueColumns(scheduleRows, talkTalkItemsInActiveGroups)
+      .concat(getMobileCombinedProgramColumns(combinedProgramLanes));
     const filmsByVenue = groupFilmsByVenue(filmsInActiveGroups);
     const talkTalkByVenue = talkTalk.groupByVenue(talkTalkItemsInActiveGroups);
     const totalWidth = getMobileGridWidth(venueColumns.length);
@@ -1826,6 +2438,14 @@
     renderMobileGridLines(venueColumns.length, timelineEnd, totalWidth, totalHeight);
 
     venueColumns.forEach((entry, index) => {
+      if (entry.type === 'program-lane') {
+        entry.lane.items.forEach(programEntry => {
+          const block = createMobileCombinedProgramBlock(programEntry, entry.lane, index, timelineEnd);
+          if (block) dom.mobileGridContent.appendChild(block);
+        });
+        return;
+      }
+
       const films = filmsByVenue.get(entry.venue) || [];
       const talkTalkEntries = talkTalkByVenue.get(entry.venue) || [];
 
@@ -1843,7 +2463,11 @@
       });
     });
 
-    if (venueColumns.length === 0 || (filmsInActiveGroups.length === 0 && talkTalkItemsInActiveGroups.length === 0)) {
+    const hasCombinedProgramItems = combinedProgramLanes.some(lane => lane.items.length > 0);
+
+    if (venueColumns.length === 0 || (filmsInActiveGroups.length === 0
+      && talkTalkItemsInActiveGroups.length === 0
+      && !hasCombinedProgramItems)) {
       renderMobileEmptyState(totalWidth, totalHeight);
     }
 
@@ -1880,7 +2504,7 @@
     dom.mobileVenueAxis.appendChild(current);
 
     venueColumns.forEach((entry, index) => {
-      const parts = getMobileVenueHeaderParts(entry.venue);
+      const parts = getMobileColumnHeaderParts(entry);
 
       if (parts.singleHeader) {
         activeGroup = null;
@@ -1912,7 +2536,7 @@
     venueColumns.forEach((entry, index) => {
       const header = document.createElement('div');
       const secondary = document.createElement('div');
-      const parts = getMobileVenueHeaderParts(entry.venue);
+      const parts = getMobileColumnHeaderParts(entry);
 
       header.className = 'mobile-venue-roomhead' + (parts.singleHeader ? ' mobile-venue-roomhead-single' : '');
       header.style.left = String(index * columnWidth) + 'px';
@@ -1920,7 +2544,7 @@
 
       secondary.className = 'mobile-venue-room'
         + (parts.singleHeader ? ' is-full-label' : '')
-        + (entry.venue === '전북대학교 삼성문화회관' ? ' is-samsung-hall' : '');
+        + (entry.type !== 'program-lane' && entry.venue === '전북대학교 삼성문화회관' ? ' is-samsung-hall' : '');
       secondary.textContent = parts.singleHeader ? parts.primary : (parts.secondary || parts.primary);
 
       header.appendChild(secondary);
@@ -1974,7 +2598,7 @@
       Math.floor((dom.mobileGridScroll.scrollLeft + 4) / columnWidth)
     ));
     const currentVenue = venueColumns[firstVisibleIndex];
-    const parts = currentVenue ? getMobileVenueHeaderParts(currentVenue.venue) : null;
+    const parts = currentVenue ? getMobileColumnHeaderParts(currentVenue) : null;
 
     if (!parts || !parts.primary) {
       dom.mobileVenueCurrent.textContent = '';
@@ -2050,7 +2674,7 @@
     return marker;
   }
 
-  function createMobileTalkTalkBlock(item, venueIndex, timelineEnd) {
+  function createMobileTalkTalkBlock(item, venueIndex, timelineEnd, className = 'mobile-talktalk-slot') {
     const startMinutes = timeToMinutes(item.startTime);
     const endMinutes = talkTalk.getEndMinutes(item);
 
@@ -2066,7 +2690,7 @@
     const label = document.createElement('span');
 
     block.type = 'button';
-    block.className = 'mobile-talktalk-slot';
+    block.className = className;
     block.style.left = x + 6 + 'px';
     block.style.top = y + 5 + 'px';
     block.style.width = Math.max(26, columnWidth - 12) + 'px';
@@ -2083,6 +2707,119 @@
     });
 
     return block;
+  }
+
+  function createMobileCombinedProgramBlock(entry, lane, venueIndex, timelineEnd) {
+    if (entry.kind === 'talktalk') {
+      return createMobileTalkTalkBlock(
+        entry.item,
+        venueIndex,
+        timelineEnd,
+        'mobile-talktalk-slot mobile-combined-program-block mobile-combined-program-block-talktalk'
+      );
+    }
+
+    if (entry.kind === 'alley') {
+      return createMobileCombinedAlleyProgramBlock(entry.item, lane, venueIndex, timelineEnd);
+    }
+
+    return createMobileCombinedProgramRowBlock(entry.row, lane, venueIndex, timelineEnd);
+  }
+
+  function createMobileCombinedAlleyProgramBlock(item, lane, venueIndex, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getAlleyScreeningEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(startMinutes);
+    const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
+    const isSearchMatch = matchesAlleyScreeningSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const block = document.createElement('button');
+    const title = document.createElement('div');
+
+    block.type = 'button';
+    block.className = 'mobile-combined-program-block';
+    block.style.left = x + 6 + 'px';
+    block.style.top = y + 4 + 'px';
+    block.style.width = Math.max(24, columnWidth - 12) + 'px';
+    block.style.height = Math.max(26, height - 8) + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.setAttribute('aria-label', item.title + ' 정보 열기');
+
+    title.className = 'mobile-combined-program-text';
+    title.textContent = getMobileCombinedProgramLabel(item.title, height);
+    block.appendChild(title);
+
+    block.addEventListener('click', event => {
+      event.stopPropagation();
+      openAlleyProgramDetail(item);
+    });
+
+    return block;
+  }
+
+  function createMobileCombinedProgramRowBlock(row, lane, venueIndex, timelineEnd) {
+    const startMinutes = timeToMinutes(row.startTime);
+    const endMinutes = getFilmEndMinutes(row);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(startMinutes);
+    const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
+    const isBookmarked = state.bookmarks.has(row.code);
+    const isSearchMatch = filmMatchesSearch(row);
+    const isDimmed = shouldDimFilm(row, isBookmarked, isSearchMatch);
+    const block = document.createElement('div');
+    const title = document.createElement('div');
+
+    block.className = 'mobile-combined-program-block';
+    block.style.left = x + 6 + 'px';
+    block.style.top = y + 4 + 'px';
+    block.style.width = Math.max(24, columnWidth - 12) + 'px';
+    block.style.height = Math.max(26, height - 8) + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, isBookmarked);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, isBookmarked);
+    block.style.boxShadow = getCombinedProgramShadow(isBookmarked, isSearchMatch);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.setAttribute('role', 'button');
+    block.setAttribute('tabindex', '0');
+    block.setAttribute('aria-label', row.title + ' 정보 열기');
+
+    title.className = 'mobile-combined-program-text';
+    title.textContent = getMobileCombinedProgramLabel(row.title, height);
+    block.appendChild(title);
+
+    block.addEventListener('click', event => {
+      event.stopPropagation();
+      openDetailChooser(row);
+    });
+    block.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      openDetailChooser(row);
+    });
+
+    return block;
+  }
+
+  function getMobileCombinedProgramLabel(title, height) {
+    if (height >= 68) return title;
+    if (title.startsWith('라이브 필름 퍼포먼스')) return '라이브 퍼포먼스';
+    if (title.startsWith('버추얼 프로덕션 세미나')) return '버추얼 세미나';
+    return title;
   }
 
   function getMobileFilmTitleConfig(film, height) {
@@ -2276,6 +3013,14 @@
     return columns;
   }
 
+  function getMobileCombinedProgramColumns(lanes) {
+    return lanes.map(lane => ({
+      type: 'program-lane',
+      venue: '__program__' + lane.id,
+      lane,
+    }));
+  }
+
   function getMobileVenueColumnWidth() {
     const profile = getActiveDensityProfile();
     return Math.round(Math.min(122, Math.max(92, profile.labelWidth * 0.64)) * 0.84) - 14;
@@ -2436,6 +3181,9 @@
     talkTalk.items.forEach(item => {
       if (talkTalk.matchesSearch(item, state.normalizedSearchQuery)) dates.add(item.date);
     });
+    alleyScreeningSource.items.forEach(item => {
+      if (matchesAlleyScreeningSearch(item)) dates.add(item.date);
+    });
     return dates;
   }
 
@@ -2489,6 +3237,156 @@
     return config.venueGroups.find(group => group.match(venue)) || config.venueGroups[config.venueGroups.length - 1];
   }
 
+  function getTalkTalkItemsForDay() {
+    return talkTalk.items.filter(item => item.date === state.currentDay);
+  }
+
+  function getCombinedTalkTalkItems() {
+    const items = getTalkTalkItemsForDay();
+    if (!hasSearchQuery()) return items;
+    return items.filter(item => talkTalk.matchesSearch(item, state.normalizedSearchQuery));
+  }
+
+  function getAlleyScreeningItemsForDay() {
+    const items = alleyScreeningSource.items.filter(item => item.date === state.currentDay);
+    if (!hasSearchQuery()) return items;
+    return items.filter(item => matchesAlleyScreeningSearch(item));
+  }
+
+  function getScheduleRowsForCurrentMode(dayData) {
+    if (state.viewMode !== 'combined') return dayData;
+    return dayData.filter(row => !isCombinedProgramRow(row));
+  }
+
+  function getProgramViewSections(dayData) {
+    if (state.viewMode === 'schedule') return [];
+
+    const sections = COMBINED_PROGRAM_LANES.map(def => ({
+      id: def.id,
+      label: def.label,
+      mobileLabel: def.mobileLabel,
+      color: def.color,
+      items: [],
+    }));
+    const sectionMap = new Map(sections.map(section => [section.id, section]));
+
+    getCombinedTalkTalkItems()
+      .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups))
+      .forEach(item => {
+        sectionMap.get('talktalk').items.push({ kind: 'talktalk', item });
+      });
+
+    dayData
+      .filter(row => isCombinedProgramRow(row) && isFilmInActiveGroup(row))
+      .forEach(row => {
+        const laneId = getCombinedProgramLaneId(row);
+        if (!laneId || !sectionMap.has(laneId)) return;
+        sectionMap.get(laneId).items.push({ kind: 'row', row });
+      });
+
+    const alleyItems = getAlleyScreeningItemsForDay()
+      .filter(item => isAlleyScreeningInActiveGroup(item))
+      .map(item => ({ kind: 'alley', item }))
+      .sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+
+    if (alleyItems.length > 0) {
+      sections.push({
+        id: 'alley',
+        label: alleyScreeningSource.overview && alleyScreeningSource.overview.label ? alleyScreeningSource.overview.label : '골목상영',
+        mobileLabel: '골목',
+        color: ALLEY_SCREENING_COLOR,
+        items: alleyItems,
+      });
+    }
+
+    sections.forEach(section => {
+      section.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+    });
+
+    return sections.filter(section => section.items.length > 0);
+  }
+
+  function getCombinedProgramLanes(dayData) {
+    if (state.viewMode === 'schedule') return [];
+
+    return getProgramViewSections(dayData)
+      .filter(section => section.id !== 'alley')
+      .concat(getAlleyCombinedProgramLanes());
+  }
+
+  function getAlleyCombinedProgramLanes() {
+    const grouped = new Map();
+
+    getAlleyScreeningItemsForDay()
+      .filter(item => isAlleyScreeningInActiveGroup(item))
+      .forEach(item => {
+        const venue = item.venue || '기타 공간';
+        if (!grouped.has(venue)) {
+          grouped.set(venue, {
+            id: 'alley:' + venue,
+            label: venue,
+            mobileLabel: getAlleyVenueMobileLabel(venue),
+            color: ALLEY_SCREENING_COLOR,
+            items: [],
+          });
+        }
+        grouped.get(venue).items.push({ kind: 'alley', item });
+      });
+
+    return Array.from(grouped.values()).map(lane => {
+      lane.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+      return lane;
+    });
+  }
+
+  function getCombinedProgramTimelineRows(lanes) {
+    return lanes.flatMap(lane => lane.items.map(entry => {
+      if (entry.kind === 'talktalk') {
+        return {
+          startTime: entry.item.startTime,
+          endTime: talkTalk.getEndTime(entry.item),
+        };
+      }
+
+      if (entry.kind === 'alley') {
+        return {
+          startTime: entry.item.startTime,
+          endTime: getAlleyScreeningEndTime(entry.item),
+        };
+      }
+
+      return {
+        startTime: entry.row.startTime,
+        endTime: entry.row.endTime || entry.row.provisionalEndTime,
+      };
+    }));
+  }
+
+  function getCombinedProgramEntryStartTime(entry) {
+    if (!entry) return '99:99';
+    if (entry.kind === 'talktalk') return entry.item.startTime || '99:99';
+    if (entry.kind === 'alley') return entry.item.startTime || '99:99';
+    return entry.row.startTime || '99:99';
+  }
+
+  function getCombinedProgramLaneId(row) {
+    if (!row) return '';
+
+    if (row.title && row.title.startsWith('수상작 상영')) {
+      return 'awards';
+    }
+
+    if (row.section === '라운드테이블' || row.section === '세미나' || (row.title && row.title.startsWith('라이브 필름 퍼포먼스'))) {
+      return 'events';
+    }
+
+    return '';
+  }
+
+  function isCombinedProgramRow(row) {
+    return Boolean(getCombinedProgramLaneId(row));
+  }
+
   function getSectionColor(section) {
     if (!section) return '#4a4a5a';
 
@@ -2523,6 +3421,20 @@
     return haystack.includes(state.normalizedSearchQuery);
   }
 
+  function matchesAlleyScreeningSearch(item) {
+    if (!hasSearchQuery()) return true;
+
+    const haystack = normalizeSearchValue([
+      alleyScreeningSource.overview && alleyScreeningSource.overview.label ? alleyScreeningSource.overview.label : '골목상영',
+      item.title,
+      item.venue,
+      item.guestLabel,
+      Array.isArray(item.tags) ? item.tags.join(' ') : '',
+    ].filter(Boolean).join(' '));
+
+    return haystack.includes(state.normalizedSearchQuery);
+  }
+
   function getResolvedDensityKey() {
     if (state.densityMode !== 'auto') return state.densityMode;
     return getAutoDensityKey(window.innerWidth, window.innerHeight);
@@ -2544,11 +3456,6 @@
 
   function getActiveDensityProfile() {
     return config.densityProfiles[state.resolvedDensityKey || getResolvedDensityKey()];
-  }
-
-  function getDensityLabel(densityKey) {
-    const mode = config.densityModes.find(item => item.id === densityKey);
-    return mode ? mode.label : densityKey;
   }
 
   function getTimelineEnd(dayData) {
@@ -2904,6 +3811,17 @@
     return shortenVenueName(venue);
   }
 
+  function getMobileColumnHeaderParts(entry) {
+    if (entry && entry.type === 'program-lane') {
+      return {
+        primary: '별도 프로그램',
+        secondary: entry.lane.mobileLabel || entry.lane.label,
+      };
+    }
+
+    return getMobileVenueHeaderParts(entry.venue);
+  }
+
   function getMobileVenueHeaderParts(venue) {
     if (venue.startsWith('CGV전주고사 ')) {
       return {
@@ -2946,6 +3864,55 @@
     return venue
       .replace('CGV전주고사 ', 'CGV ')
       .replace('메가박스 전주객사 ', '메가박스 ');
+  }
+
+  function getAlleyScreeningPageUrl(item) {
+    if (item && item.pageUrl) return item.pageUrl;
+    return alleyScreeningSource.overview && alleyScreeningSource.overview.pageUrl
+      ? alleyScreeningSource.overview.pageUrl
+      : 'https://archive.jeonjufest.kr/community/news/view.asp?idx=9351';
+  }
+
+  function getAlleyScreeningDurationMinutes(item) {
+    const itemDuration = item && item.durationMinutes ? Number(item.durationMinutes) : NaN;
+    return Number.isFinite(itemDuration) && itemDuration > 0
+      ? itemDuration
+      : OPEN_ENDED_SLOT_FALLBACK_MINUTES;
+  }
+
+  function getAlleyScreeningEndMinutes(item) {
+    const startMinutes = timeToMinutes(item && item.startTime ? item.startTime : '');
+    if (startMinutes === null) return null;
+    return startMinutes + getAlleyScreeningDurationMinutes(item);
+  }
+
+  function getAlleyScreeningEndTime(item) {
+    const endMinutes = getAlleyScreeningEndMinutes(item);
+    return endMinutes === null ? '' : minutesToClockLabel(endMinutes);
+  }
+
+  function formatAlleyScreeningTimeRange(item) {
+    if (!item || !item.startTime) return '—';
+    return item.endTime ? item.startTime + ' – ' + item.endTime : item.startTime;
+  }
+
+  function getAlleyScreeningTagsText(item) {
+    const tags = Array.isArray(item && item.tags) ? item.tags.filter(Boolean) : [];
+    return tags.join(' · ');
+  }
+
+  function isAlleyScreeningInActiveGroup(item) {
+    return state.activeGroups.has(getVenueGroup(item.venue).id);
+  }
+
+  function getAlleyVenueMobileLabel(venue) {
+    return ALLEY_SCREENING_VENUE_LABELS[venue] || venue;
+  }
+
+  function formatDayLabel(dateValue) {
+    const day = dateValue ? dayLookup.get(dateValue) : null;
+    if (!day) return dateValue || '—';
+    return day.label + ' ' + day.sub;
   }
 
   function getMetaTags(meta) {

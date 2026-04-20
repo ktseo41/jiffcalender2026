@@ -24,9 +24,10 @@
   <div class="day-tabs-shell" id="dayTabsShell">
     <div class="day-tabs" id="dayTabs"></div>
   </div>
-  <div class="density-controls">
-    <div class="density-selector" id="densitySelector"></div>
-    <div class="density-hint" id="densityHint"></div>
+  <div class="view-mode-tabs" id="viewModeTabs" aria-label="보기 모드">
+    <button type="button" class="view-mode-tab" data-view-mode="schedule" aria-pressed="true">상영시간표</button>
+    <button type="button" class="view-mode-tab" data-view-mode="combined" aria-pressed="false">같이보기</button>
+    <button type="button" class="view-mode-tab" data-view-mode="programs" aria-pressed="false">별도 프로그램</button>
   </div>
   <div class="mobile-header-search" id="mobileHeaderSearch">
     <div class="search-shell mobile-search-shell">
@@ -120,6 +121,10 @@
   </div>
 </div>
 
+<div id="programs-view" aria-live="polite">
+  <div id="programs-view-content"></div>
+</div>
+
 <div id="mobile-notice" class="mobile-notice" aria-live="polite" aria-hidden="true">
   <div class="mobile-notice-card">
     <p class="mobile-notice-title">이 페이지는 PC에 최적화되어 있습니다.</p>
@@ -158,6 +163,7 @@
 <script defer src="./jiff2026/talktalk.js"></script>
 <script defer src="./jiff2026/talktalk-runtime.js"></script>
 <script defer src="./jiff2026/x-majung.js"></script>
+<script defer src="./jiff2026/alley-screening.js"></script>
 <script defer src="./jiff2026/app.js"></script>
 </body>
 </html>
