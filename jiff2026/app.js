@@ -2,6 +2,7 @@
   const dataSource = window.JIFF_SCHEDULE_DATA;
   const config = window.JIFF_SCHEDULE_CONFIG;
   const talkTalkSource = window.JIFF_TALKTALK_DATA || { overview: null, items: [] };
+  const xMajungSource = window.JIFF_X_MAJUNG_DATA || { byCode: {} };
   const talkTalkRuntimeFactory = window.JIFF_TALKTALK_RUNTIME && window.JIFF_TALKTALK_RUNTIME.createTalkTalkRuntime;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
   const DAY_QUERY_PARAM = 'day';
@@ -1419,6 +1420,12 @@
               ? ' · ' + escapeHtml(relatedEvent.separateDate + ' ' + relatedEvent.separateStartTime + ' ' + relatedEvent.separateVenue)
               : ' · 상영 후 ' + escapeHtml(String(relatedEvent.durationMinutes)) + '분',
             '</div>',
+            relatedEvent.guestLabel
+              ? '<div class="dc-mobile-copy">게스트 · ' + escapeHtml(relatedEvent.guestLabel) + '</div>'
+              : '',
+            relatedEvent.moderator
+              ? '<div class="dc-mobile-copy">모더레이터 · ' + escapeHtml(relatedEvent.moderator) + '</div>'
+              : '',
             '</div>',
           ].join('')
         : '',
@@ -1474,6 +1481,14 @@
         parts.push(' · 상영 후 진행');
       }
       parts.push('</div>');
+
+      if (relatedEvent.guestLabel) {
+        parts.push('<div class="tt-shorts">👥 게스트 · ' + escapeHtml(relatedEvent.guestLabel) + '</div>');
+      }
+
+      if (relatedEvent.moderator) {
+        parts.push('<div class="tt-shorts">🎙 모더레이터 · ' + escapeHtml(relatedEvent.moderator) + '</div>');
+      }
     }
 
     parts.push('<div class="tt-tags">');
@@ -1521,6 +1536,14 @@
     } else {
       parts.push('<strong>진행</strong> 상영 후 ' + escapeHtml(String(relatedEvent.durationMinutes)) + '분<br>');
       parts.push('<strong>시작</strong> ' + escapeHtml(film.endTime) + ' 이후');
+    }
+
+    if (relatedEvent.guestLabel) {
+      parts.push('<br><strong>게스트</strong> ' + escapeHtml(relatedEvent.guestLabel));
+    }
+
+    if (relatedEvent.moderator) {
+      parts.push('<br><strong>모더레이터</strong> ' + escapeHtml(relatedEvent.moderator));
     }
 
     parts.push('</div>');
@@ -2493,6 +2516,8 @@
       film.code,
       film.relatedEvent ? film.relatedEvent.label : '',
       film.relatedEvent ? film.relatedEvent.searchText : '',
+      film.relatedEvent ? film.relatedEvent.guestLabel : '',
+      film.relatedEvent ? film.relatedEvent.moderator : '',
     ].filter(Boolean).join(' '));
 
     return haystack.includes(state.normalizedSearchQuery);
@@ -2703,7 +2728,16 @@
 
   function getLinkedProgramEvent(row) {
     if (!row || !row.code || !config.linkedProgramEventsByCode) return null;
-    return config.linkedProgramEventsByCode[row.code] || null;
+
+    const baseEvent = config.linkedProgramEventsByCode[row.code] || null;
+    const majungMeta = xMajungSource.byCode && xMajungSource.byCode[row.code]
+      ? xMajungSource.byCode[row.code]
+      : null;
+
+    if (!baseEvent) return null;
+    if (!majungMeta) return baseEvent;
+
+    return Object.assign({}, baseEvent, majungMeta);
   }
 
   function getScheduleMetaEntry(row, scheduleMetaSource) {

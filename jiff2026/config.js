@@ -9,6 +9,7 @@ const EVENT_PAGE_URLS = Object.freeze({
 
 const LINKED_PROGRAM_EVENTS_BY_CODE = Object.freeze({
   '130': Object.freeze({ label: '영특한 대화', durationMinutes: 60, url: EVENT_PAGE_URLS.smartTalk }),
+  '133': Object.freeze({ label: '마중클래스', durationMinutes: 50, url: EVENT_PAGE_URLS.xMajung }),
   '146': Object.freeze({ label: '영화로의 여행', durationMinutes: 60, url: EVENT_PAGE_URLS.screeningsTalk }),
   '148': Object.freeze({ label: 'J 스페셜클래스', durationMinutes: 60, url: EVENT_PAGE_URLS.jSpecial }),
   '165': Object.freeze({ label: '마중클래스', durationMinutes: 50, url: EVENT_PAGE_URLS.xMajung }),
