@@ -2703,27 +2703,56 @@
     return rows.map(row => {
       const enrichedRow = Object.assign({}, row);
       const linkedEvent = getLinkedProgramEvent(row);
+      const manualDetailLink = getManualDetailLink(row);
 
       if (linkedEvent) {
         enrichedRow.relatedEvent = linkedEvent;
       }
 
-      if (!scheduleMetaSource) return enrichedRow;
+      const metaEntry = scheduleMetaSource
+        ? getScheduleMetaEntry(enrichedRow, scheduleMetaSource)
+        : null;
+      const fallbackMetaEntry = !metaEntry && manualDetailLink
+        ? createManualDetailMetaEntry(enrichedRow, manualDetailLink)
+        : null;
+      const resolvedMetaEntry = metaEntry || fallbackMetaEntry;
 
-      const metaEntry = getScheduleMetaEntry(enrichedRow, scheduleMetaSource);
-
-      if (!metaEntry) return enrichedRow;
+      if (!resolvedMetaEntry) return enrichedRow;
 
       return Object.assign(enrichedRow, {
-        directorLabel: metaEntry.directorLabel || '',
-        directorNames: metaEntry.directorNames || [],
-        directorSearchText: (metaEntry.directorNames || []).join(' '),
-        detailMovieId: metaEntry.detailMovieId || '',
-        detailUrl: metaEntry.detailUrl || '',
-        detailCandidates: metaEntry.detailCandidates || [],
-        hasMultipleDetails: Boolean(metaEntry.hasMultipleDetails),
+        directorLabel: resolvedMetaEntry.directorLabel || '',
+        directorNames: resolvedMetaEntry.directorNames || [],
+        directorSearchText: (resolvedMetaEntry.directorNames || []).join(' '),
+        detailMovieId: resolvedMetaEntry.detailMovieId || '',
+        detailUrl: resolvedMetaEntry.detailUrl || '',
+        detailCandidates: resolvedMetaEntry.detailCandidates || [],
+        hasMultipleDetails: Boolean(resolvedMetaEntry.hasMultipleDetails),
       });
     });
+  }
+
+  function getManualDetailLink(row) {
+    if (!row || !row.code || !config.manualDetailLinksByCode) return null;
+    return config.manualDetailLinksByCode[row.code] || null;
+  }
+
+  function createManualDetailMetaEntry(row, link) {
+    if (!link || !link.url) return null;
+
+    return {
+      detailMovieId: '',
+      detailUrl: link.url,
+      detailCandidates: [
+        {
+          movieId: 'manual-' + String(row.code || ''),
+          title: link.title || row.title || '상세보기',
+          url: link.url,
+        },
+      ],
+      hasMultipleDetails: false,
+      directorLabel: '',
+      directorNames: [],
+    };
   }
 
   function getLinkedProgramEvent(row) {

@@ -62,6 +62,17 @@ const LINKED_PROGRAM_EVENTS_BY_CODE = Object.freeze({
   '729': Object.freeze({ label: '영특한 대화', durationMinutes: 60, url: EVENT_PAGE_URLS.smartTalk }),
 });
 
+const MANUAL_DETAIL_LINKS_BY_CODE = Object.freeze({
+  '9001': Object.freeze({
+    url: 'https://www.jeonjufest.kr/event/100f100p.asp',
+    title: '살롱 라운드테이블 1 - 디자이너, 영화관을 디자인하다',
+  }),
+  '9002': Object.freeze({
+    url: 'https://www.jeonjufest.kr/event/100f100p.asp',
+    title: '살롱 라운드테이블 2 - 장소 만들기로서의 영화관 디자인',
+  }),
+});
+
 window.JIFF_SCHEDULE_CONFIG = Object.freeze({
   sectionColors: {
     '코리안시네마': '#e07b39',
@@ -194,5 +205,6 @@ window.JIFF_SCHEDULE_CONFIG = Object.freeze({
     activeGroups: ['cgv', 'mega', 'other'],
     densityMode: 'auto',
   }),
+  manualDetailLinksByCode: MANUAL_DETAIL_LINKS_BY_CODE,
   linkedProgramEventsByCode: LINKED_PROGRAM_EVENTS_BY_CODE,
 });
