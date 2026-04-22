@@ -24,10 +24,10 @@
   <div class="day-tabs-shell" id="dayTabsShell">
     <div class="day-tabs" id="dayTabs"></div>
   </div>
-  <div class="view-mode-tabs" id="viewModeTabs" aria-label="보기 모드">
-    <button type="button" class="view-mode-tab" data-view-mode="schedule" aria-pressed="true">상영시간표</button>
-    <button type="button" class="view-mode-tab" data-view-mode="combined" aria-pressed="false">같이보기</button>
-    <button type="button" class="view-mode-tab" data-view-mode="programs" aria-pressed="false">별도 프로그램</button>
+  <div class="view-mode-tabs header-view-mode-tabs" id="desktopViewModeTabs" data-view-mode-tabs="desktop" aria-label="보기 모드">
+    <button type="button" class="view-mode-tab" data-view-mode="schedule" data-desktop-label="상영 시간표" data-mobile-label="상영 시간표" aria-pressed="true">상영 시간표</button>
+    <button type="button" class="view-mode-tab" data-view-mode="programs" data-desktop-label="별도 프로그램" data-mobile-label="별도 프로그램" aria-pressed="false">별도 프로그램</button>
+    <button type="button" class="view-mode-tab" data-view-mode="combined" data-desktop-label="같이 보기" data-mobile-label="같이 보기" aria-pressed="false">같이 보기</button>
   </div>
   <div class="mobile-header-search" id="mobileHeaderSearch">
     <div class="search-shell mobile-search-shell">
@@ -87,6 +87,14 @@
       <button type="button" class="search-clear-btn" id="searchClearBtn" aria-label="검색어 지우기">✕</button>
     </div>
   </div>
+  <div class="mobile-controls-section-title">보기</div>
+  <div class="sep"></div>
+  <div class="view-mode-tabs mobile-view-mode-tabs" id="mobileViewModeTabs" data-view-mode-tabs="mobile" aria-label="보기 모드">
+    <button type="button" class="view-mode-tab" data-view-mode="schedule" data-desktop-label="상영 시간표" data-mobile-label="상영 시간표" aria-pressed="true">상영 시간표</button>
+    <button type="button" class="view-mode-tab" data-view-mode="programs" data-desktop-label="별도 프로그램" data-mobile-label="별도 프로그램" aria-pressed="false">별도 프로그램</button>
+    <button type="button" class="view-mode-tab" data-view-mode="combined" data-desktop-label="같이 보기" data-mobile-label="같이 보기" aria-pressed="false">같이 보기</button>
+  </div>
+  <button type="button" class="mobile-layout-toggle-btn" id="mobileLayoutToggleBtn" aria-pressed="false">보기 방향: 세로</button>
   <div class="mobile-controls-section-title">상영관</div>
   <div class="sep"></div>
   <span class="filter-label">상영관</span>

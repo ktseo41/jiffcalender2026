@@ -98,7 +98,8 @@
     dom.logo = document.querySelector('#app-header .logo');
     dom.dayTabsShell = document.getElementById('dayTabsShell');
     dom.dayTabs = document.getElementById('dayTabs');
-    dom.viewModeTabs = document.getElementById('viewModeTabs');
+    dom.desktopViewModeTabs = document.getElementById('desktopViewModeTabs');
+    dom.mobileViewModeTabs = document.getElementById('mobileViewModeTabs');
     dom.venueFilters = document.getElementById('venueFilters');
     dom.legend = document.getElementById('legend');
     dom.searchInput = document.getElementById('searchInput');
@@ -107,6 +108,7 @@
     dom.mobileSearchInput = document.getElementById('mobileSearchInput');
     dom.mobileSearchClearBtn = document.getElementById('mobileSearchClearBtn');
     dom.mobileDesktopToggleBtn = document.getElementById('mobileDesktopToggleBtn');
+    dom.mobileLayoutToggleBtn = document.getElementById('mobileLayoutToggleBtn');
     dom.mobileSearchToggleBtn = document.getElementById('mobileSearchToggleBtn');
     dom.mobileControlsToggleBtn = document.getElementById('mobileControlsToggleBtn');
     dom.bookmarkBtn = document.getElementById('bookmarkBtn');
@@ -152,11 +154,11 @@
     dom.mobileSearchInput.addEventListener('input', handleMobileSearchInput);
     dom.mobileSearchClearBtn.addEventListener('click', handleMobileSearchClearClick);
     dom.mobileDesktopToggleBtn.addEventListener('click', toggleDesktopViewMode);
+    dom.mobileLayoutToggleBtn.addEventListener('click', toggleDesktopViewMode);
     dom.mobileSearchToggleBtn.addEventListener('click', openMobileHeaderSearch);
     dom.mobileControlsToggleBtn.addEventListener('click', toggleMobileControls);
-    if (dom.viewModeTabs) {
-      dom.viewModeTabs.addEventListener('click', handleViewModeClick);
-    }
+    if (dom.desktopViewModeTabs) dom.desktopViewModeTabs.addEventListener('click', handleViewModeClick);
+    if (dom.mobileViewModeTabs) dom.mobileViewModeTabs.addEventListener('click', handleViewModeClick);
     dom.bookmarksList.addEventListener('click', handleBookmarkListClick);
     dom.bookmarkBtn.addEventListener('click', toggleBookmarksPanel);
     dom.bookmarkHighlightBtn.addEventListener('click', toggleBookmarkHighlight);
@@ -389,15 +391,26 @@
   }
 
   function renderViewModeTabs() {
-    if (!dom.viewModeTabs) return;
+    const tabGroups = [dom.desktopViewModeTabs, dom.mobileViewModeTabs].filter(Boolean);
+    if (tabGroups.length === 0) return;
 
     document.body.classList.toggle('programs-view-mode', state.viewMode === 'programs');
     document.body.classList.toggle('combined-view-mode', state.viewMode === 'combined');
 
-    dom.viewModeTabs.querySelectorAll('[data-view-mode]').forEach(button => {
-      const isActive = button.dataset.viewMode === state.viewMode;
-      button.classList.toggle('active', isActive);
-      button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    tabGroups.forEach(group => {
+      const useMobileLabel = group === dom.mobileViewModeTabs;
+
+      group.querySelectorAll('[data-view-mode]').forEach(button => {
+        const isActive = button.dataset.viewMode === state.viewMode;
+        const nextLabel = useMobileLabel
+          ? (button.dataset.mobileLabel || button.textContent)
+          : (button.dataset.desktopLabel || button.textContent);
+        button.classList.toggle('active', isActive);
+        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        if (button.textContent !== nextLabel) {
+          button.textContent = nextLabel;
+        }
+      });
     });
   }
 
@@ -469,8 +482,6 @@
     dom.mobileHeaderSearch.classList.toggle('is-open', isMobileSearchVisible);
     dom.logo.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.mobileSearchToggleBtn.classList.toggle('is-active', isMobileSearchVisible);
-    dom.mobileDesktopToggleBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
-    dom.mobileDesktopToggleBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');
     dom.bookmarkBtn.classList.toggle('hidden-by-search', isMobileSearchVisible);
     dom.bookmarkBtn.setAttribute('aria-hidden', isMobileSearchVisible ? 'true' : 'false');
     dom.mobileSearchClearBtn.setAttribute('aria-label', hasSearchQuery() ? '검색 지우기' : '검색 닫기');
@@ -482,12 +493,19 @@
     const currentModeLabel = isDesktopMode ? '가로' : '세로';
     const nextModeLabel = isDesktopMode ? '세로' : '가로';
 
-    dom.mobileDesktopToggleBtn.hidden = !shouldShow;
-    dom.mobileDesktopToggleBtn.classList.toggle('is-active', isDesktopMode);
+    dom.mobileDesktopToggleBtn.hidden = true;
+    dom.mobileDesktopToggleBtn.classList.remove('is-active');
     dom.mobileDesktopToggleBtn.dataset.viewMode = isDesktopMode ? 'horizontal' : 'vertical';
-    dom.mobileDesktopToggleBtn.setAttribute('aria-pressed', isDesktopMode ? 'true' : 'false');
+    dom.mobileDesktopToggleBtn.setAttribute('aria-pressed', 'false');
     dom.mobileDesktopToggleBtn.setAttribute('aria-label', '현재 ' + currentModeLabel + ' 보기, 눌러서 ' + nextModeLabel + ' 보기로 전환');
     dom.mobileDesktopToggleBtn.setAttribute('title', nextModeLabel + ' 보기로 전환');
+
+    dom.mobileLayoutToggleBtn.hidden = !shouldShow;
+    dom.mobileLayoutToggleBtn.classList.toggle('is-active', isDesktopMode);
+    dom.mobileLayoutToggleBtn.setAttribute('aria-pressed', isDesktopMode ? 'true' : 'false');
+    dom.mobileLayoutToggleBtn.setAttribute('aria-label', '현재 ' + currentModeLabel + ' 보기, 눌러서 ' + nextModeLabel + ' 보기로 전환');
+    dom.mobileLayoutToggleBtn.setAttribute('title', nextModeLabel + ' 보기로 전환');
+    dom.mobileLayoutToggleBtn.textContent = '보기 방향: ' + currentModeLabel;
   }
 
   function renderMobileNotice() {
@@ -543,7 +561,7 @@
   }
 
   function renderProgramsTimelineDay(dayData) {
-    const lanes = getCombinedProgramLanes(dayData);
+    const lanes = getProgramsViewLanes(dayData);
     const totalItems = lanes.reduce((count, lane) => count + lane.items.length, 0);
 
     dom.programsViewContent.innerHTML = '';
@@ -819,17 +837,17 @@
 
   function renderTimelineDay(dayData) {
     const scheduleRows = getScheduleRowsForCurrentMode(dayData);
-    const combinedProgramLanes = state.viewMode === 'combined'
+    const supplementalProgramLanes = state.viewMode === 'combined'
       ? getCombinedProgramLanes(dayData)
-      : [];
-    const talkTalkDayItems = state.viewMode === 'combined'
-      ? []
-      : talkTalk.getCurrentItems(state.currentDay, state.normalizedSearchQuery);
+      : state.viewMode === 'schedule'
+        ? getAlleyCombinedProgramLanes()
+        : [];
+    const talkTalkDayItems = [];
     const timelineTalkTalkItems = talkTalkDayItems;
     const timelineEnd = getTimelineEnd(
       scheduleRows
         .concat(talkTalk.getTimelineRows(timelineTalkTalkItems))
-        .concat(getCombinedProgramTimelineRows(combinedProgramLanes))
+        .concat(getCombinedProgramTimelineRows(supplementalProgramLanes))
     );
     const totalWidth = getTotalWidth(timelineEnd);
     const venuesByGroup = getVenuesForDay(scheduleRows, talkTalkDayItems);
@@ -855,8 +873,13 @@
       renderVenueGroup(group, venues, filmsByVenue, talkTalkByVenue, totalWidth, timelineEnd);
     });
 
-    if (combinedProgramLanes.length > 0) {
-      renderCombinedProgramLanes(combinedProgramLanes, totalWidth, timelineEnd);
+    if (supplementalProgramLanes.length > 0) {
+      renderCombinedProgramLanes(
+        supplementalProgramLanes,
+        totalWidth,
+        timelineEnd,
+        state.viewMode === 'schedule' ? '골목상영' : '별도 프로그램'
+      );
     }
 
     syncLabelScroll();
@@ -902,12 +925,12 @@
     });
   }
 
-  function renderCombinedProgramLanes(lanes, totalWidth, timelineEnd) {
+  function renderCombinedProgramLanes(lanes, totalWidth, timelineEnd, headingLabel = '별도 프로그램') {
     const labelHeader = document.createElement('div');
     const timelineHeader = document.createElement('div');
 
     labelHeader.className = 'venue-group-header';
-    labelHeader.textContent = '별도 프로그램';
+    labelHeader.textContent = headingLabel;
     dom.venueLabelScroll.appendChild(labelHeader);
 
     timelineHeader.className = 'venue-group-header-timeline';
@@ -2401,17 +2424,15 @@
   function renderMobileDay(dayData) {
     const scheduleRows = getScheduleRowsForCurrentMode(dayData);
     const filmsInActiveGroups = scheduleRows.filter(isFilmInActiveGroup);
-    const combinedProgramLanes = state.viewMode === 'combined'
+    const supplementalProgramLanes = state.viewMode === 'combined'
       ? getCombinedProgramLanes(dayData)
-      : [];
-    const talkTalkItemsInActiveGroups = state.viewMode === 'combined'
-      ? []
-      : talkTalk
-        .getCurrentItems(state.currentDay, state.normalizedSearchQuery)
-        .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
+      : state.viewMode === 'schedule'
+        ? getAlleyCombinedProgramLanes()
+        : [];
+    const talkTalkItemsInActiveGroups = [];
     const timelineTalkTalkItems = talkTalkItemsInActiveGroups;
     const talkTalkTimelineRows = talkTalk.getTimelineRows(timelineTalkTalkItems);
-    const combinedTimelineRows = getCombinedProgramTimelineRows(combinedProgramLanes);
+    const combinedTimelineRows = getCombinedProgramTimelineRows(supplementalProgramLanes);
     const timelineSource = filmsInActiveGroups.concat(talkTalkTimelineRows, combinedTimelineRows);
     const fallbackTimelineSource = scheduleRows.concat(
       talkTalk.getTimelineRows(talkTalkItemsInActiveGroups),
@@ -2419,7 +2440,7 @@
     );
     const timelineEnd = getTimelineEnd(timelineSource.length > 0 ? timelineSource : fallbackTimelineSource);
     const venueColumns = getMobileVenueColumns(scheduleRows, talkTalkItemsInActiveGroups)
-      .concat(getMobileCombinedProgramColumns(combinedProgramLanes));
+      .concat(getMobileCombinedProgramColumns(supplementalProgramLanes));
     const filmsByVenue = groupFilmsByVenue(filmsInActiveGroups);
     const talkTalkByVenue = talkTalk.groupByVenue(talkTalkItemsInActiveGroups);
     const totalWidth = getMobileGridWidth(venueColumns.length);
@@ -2463,7 +2484,7 @@
       });
     });
 
-    const hasCombinedProgramItems = combinedProgramLanes.some(lane => lane.items.length > 0);
+    const hasCombinedProgramItems = supplementalProgramLanes.some(lane => lane.items.length > 0);
 
     if (venueColumns.length === 0 || (filmsInActiveGroups.length === 0
       && talkTalkItemsInActiveGroups.length === 0
@@ -3254,8 +3275,11 @@
   }
 
   function getScheduleRowsForCurrentMode(dayData) {
-    if (state.viewMode !== 'combined') return dayData;
-    return dayData.filter(row => !isCombinedProgramRow(row));
+    if (state.viewMode === 'programs') return [];
+    if (state.viewMode === 'schedule' || state.viewMode === 'combined') {
+      return dayData.filter(row => !isCombinedProgramRow(row));
+    }
+    return dayData;
   }
 
   function getProgramViewSections(dayData) {
@@ -3306,12 +3330,54 @@
     return sections.filter(section => section.items.length > 0);
   }
 
+  function getProgramsViewLanes(dayData) {
+    const grouped = new Map();
+    const talkTalkItems = getCombinedTalkTalkItems()
+      .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
+    const combinedRows = dayData
+      .filter(row => isCombinedProgramRow(row) && isFilmInActiveGroup(row));
+
+    talkTalkItems.forEach(item => {
+      const venue = talkTalk.getVenue(item);
+      const lane = ensureProgramsViewVenueLane(grouped, venue, COMBINED_PROGRAM_LANES[0].color);
+      lane.items.push({ kind: 'talktalk', item });
+    });
+
+    combinedRows.forEach(row => {
+      const laneId = getCombinedProgramLaneId(row);
+      const laneColor = laneId === 'awards'
+        ? COMBINED_PROGRAM_LANES.find(item => item.id === 'awards').color
+        : COMBINED_PROGRAM_LANES.find(item => item.id === 'events').color;
+      const lane = ensureProgramsViewVenueLane(grouped, row.venue, laneColor);
+      lane.items.push({ kind: 'row', row });
+    });
+
+    return Array.from(grouped.values()).map(lane => {
+      lane.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+      return lane;
+    });
+  }
+
+  function ensureProgramsViewVenueLane(grouped, venue, color) {
+    if (!grouped.has(venue)) {
+      grouped.set(venue, {
+        id: 'program-venue:' + venue,
+        venue,
+        label: venue,
+        mobileLabel: shortenVenueName(venue),
+        color,
+        items: [],
+      });
+    }
+
+    const lane = grouped.get(venue);
+    if (!lane.color && color) lane.color = color;
+    return lane;
+  }
+
   function getCombinedProgramLanes(dayData) {
     if (state.viewMode === 'schedule') return [];
-
-    return getProgramViewSections(dayData)
-      .filter(section => section.id !== 'alley')
-      .concat(getAlleyCombinedProgramLanes());
+    return getProgramsViewLanes(dayData).concat(getAlleyCombinedProgramLanes());
   }
 
   function getAlleyCombinedProgramLanes() {
@@ -3324,6 +3390,9 @@
         if (!grouped.has(venue)) {
           grouped.set(venue, {
             id: 'alley:' + venue,
+            groupLabel: alleyScreeningSource.overview && alleyScreeningSource.overview.label
+              ? alleyScreeningSource.overview.label
+              : '골목상영',
             label: venue,
             mobileLabel: getAlleyVenueMobileLabel(venue),
             color: ALLEY_SCREENING_COLOR,
@@ -3813,8 +3882,12 @@
 
   function getMobileColumnHeaderParts(entry) {
     if (entry && entry.type === 'program-lane') {
+      if (entry.lane && entry.lane.venue) {
+        return getMobileVenueHeaderParts(entry.lane.venue);
+      }
+
       return {
-        primary: '별도 프로그램',
+        primary: entry.lane.groupLabel || '별도 프로그램',
         secondary: entry.lane.mobileLabel || entry.lane.label,
       };
     }
