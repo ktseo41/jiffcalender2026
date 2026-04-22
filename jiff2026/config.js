@@ -63,6 +63,11 @@ const LINKED_PROGRAM_EVENTS_BY_CODE = Object.freeze({
 });
 
 const MANUAL_DETAIL_LINKS_BY_CODE = Object.freeze({
+  '239': Object.freeze({
+    url: 'https://jeonjufest.kr/event/jeonju_forum.asp',
+    title: '버추얼 프로덕션 세미나 : AI와 버추얼 프로덕션, 영화 제작의 새로운 가능성',
+    overrideGeneratedDetail: true,
+  }),
   '9001': Object.freeze({
     url: 'https://www.jeonjufest.kr/event/100f100p.asp',
     title: '살롱 라운드테이블 1 - 디자이너, 영화관을 디자인하다',

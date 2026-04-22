@@ -522,12 +522,24 @@ body {
   transition: all 0.15s;
   font-family: inherit;
   white-space: nowrap;
+  position: relative;
 }
 .view-mode-tab:hover:not(:disabled) { color: var(--text); }
 .view-mode-tab.active {
   background: rgba(200,168,75,0.16);
   border-color: rgba(200,168,75,0.5);
   color: var(--accent);
+}
+.view-mode-tab.has-search-match::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff6b57;
+  box-shadow: 0 0 8px rgba(255,107,87,0.64);
 }
 .view-mode-tab:disabled {
   color: var(--text-faint);
@@ -1954,11 +1966,13 @@ body.has-mobile-panel-open .mobile-notice.visible {
 }
 .program-lane-block {
   position: absolute;
+  appearance: none;
   top: 6px;
   height: calc(var(--row-h) - 12px);
   border-radius: 4px;
   border: 1px solid rgba(255,255,255,0.18);
   color: rgba(246,244,238,0.94);
+  font: inherit;
   padding: 0 8px;
   display: flex;
   align-items: center;

@@ -3,6 +3,8 @@
   const config = window.JIFF_SCHEDULE_CONFIG;
   const talkTalkSource = window.JIFF_TALKTALK_DATA || { overview: null, items: [] };
   const alleyScreeningSource = window.JIFF_ALLEY_SCREENING_DATA || { overview: null, items: [] };
+  const forumProgramsSource = window.JIFF_FORUM_PROGRAMS_DATA || { overview: null, items: [] };
+  const outdoorScreeningSource = window.JIFF_OUTDOOR_SCREENING_DATA || { overview: null, items: [] };
   const xMajungSource = window.JIFF_X_MAJUNG_DATA || { byCode: {} };
   const talkTalkRuntimeFactory = window.JIFF_TALKTALK_RUNTIME && window.JIFF_TALKTALK_RUNTIME.createTalkTalkRuntime;
   const BOOKMARK_STORAGE_KEY = 'jiff2026-bookmarks';
@@ -24,6 +26,8 @@
     Object.freeze({ id: 'awards', label: '수상작 상영', mobileLabel: '수상작', color: '#7d8996' }),
   ]);
   const ALLEY_SCREENING_COLOR = '#6f8a67';
+  const FORUM_PROGRAM_COLOR = '#8a6f9f';
+  const OUTDOOR_SCREENING_COLOR = '#6c8f80';
   const ALLEY_SCREENING_VENUE_LABELS = Object.freeze({
     '치평주차장 옆': '치평주차장',
     '전주중앙교회 광장': '중앙교회',
@@ -393,6 +397,7 @@
   function renderViewModeTabs() {
     const tabGroups = [dom.desktopViewModeTabs, dom.mobileViewModeTabs].filter(Boolean);
     if (tabGroups.length === 0) return;
+    const searchMatchViewModes = getViewModeSearchMatches();
 
     document.body.classList.toggle('programs-view-mode', state.viewMode === 'programs');
     document.body.classList.toggle('combined-view-mode', state.viewMode === 'combined');
@@ -406,6 +411,7 @@
           ? (button.dataset.mobileLabel || button.textContent)
           : (button.dataset.desktopLabel || button.textContent);
         button.classList.toggle('active', isActive);
+        button.classList.toggle('has-search-match', searchMatchViewModes.has(button.dataset.viewMode));
         button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         if (button.textContent !== nextLabel) {
           button.textContent = nextLabel;
@@ -840,7 +846,7 @@
     const supplementalProgramLanes = state.viewMode === 'combined'
       ? getCombinedProgramLanes(dayData)
       : state.viewMode === 'schedule'
-        ? getAlleyCombinedProgramLanes()
+        ? getScheduleSupplementalProgramLanes()
         : [];
     const talkTalkDayItems = [];
     const timelineTalkTalkItems = talkTalkDayItems;
@@ -874,12 +880,7 @@
     });
 
     if (supplementalProgramLanes.length > 0) {
-      renderCombinedProgramLanes(
-        supplementalProgramLanes,
-        totalWidth,
-        timelineEnd,
-        state.viewMode === 'schedule' ? '골목상영' : '별도 프로그램'
-      );
+      renderCombinedProgramLanes(supplementalProgramLanes, totalWidth, timelineEnd, '별도 프로그램');
     }
 
     syncLabelScroll();
@@ -926,18 +927,25 @@
   }
 
   function renderCombinedProgramLanes(lanes, totalWidth, timelineEnd, headingLabel = '별도 프로그램') {
-    const labelHeader = document.createElement('div');
-    const timelineHeader = document.createElement('div');
-
-    labelHeader.className = 'venue-group-header';
-    labelHeader.textContent = headingLabel;
-    dom.venueLabelScroll.appendChild(labelHeader);
-
-    timelineHeader.className = 'venue-group-header-timeline';
-    timelineHeader.style.width = totalWidth + 'px';
-    dom.timelineContent.appendChild(timelineHeader);
+    let currentHeading = '';
 
     lanes.forEach(lane => {
+      const nextHeading = lane.groupLabel || headingLabel;
+
+      if (nextHeading !== currentHeading) {
+        const labelHeader = document.createElement('div');
+        const timelineHeader = document.createElement('div');
+
+        labelHeader.className = 'venue-group-header';
+        labelHeader.textContent = nextHeading;
+        dom.venueLabelScroll.appendChild(labelHeader);
+
+        timelineHeader.className = 'venue-group-header-timeline';
+        timelineHeader.style.width = totalWidth + 'px';
+        dom.timelineContent.appendChild(timelineHeader);
+        currentHeading = nextHeading;
+      }
+
       dom.venueLabelScroll.appendChild(createCombinedProgramLaneLabel(lane));
       dom.timelineContent.appendChild(createCombinedProgramLaneRow(lane, totalWidth, timelineEnd));
     });
@@ -963,6 +971,10 @@
         ? createTalkTalkBlock(entry.item, timelineEnd, 'talktalk-slot program-lane-block program-lane-block-talktalk')
         : entry.kind === 'alley'
           ? createCombinedAlleyProgramBlock(entry.item, lane, timelineEnd)
+          : entry.kind === 'forum'
+            ? createCombinedForumProgramBlock(entry.item, lane, timelineEnd)
+            : entry.kind === 'outdoor'
+              ? createCombinedOutdoorProgramBlock(entry.item, lane, timelineEnd)
           : createCombinedProgramRowBlock(entry.row, lane, timelineEnd);
 
       if (block) row.appendChild(block);
@@ -1161,6 +1173,112 @@
     }
 
     block.addEventListener('mouseenter', () => showAlleyProgramTooltip(item, lane.color));
+    block.addEventListener('mousemove', moveTooltip);
+    block.addEventListener('mouseleave', hideTooltip);
+
+    return block;
+  }
+
+  function createCombinedForumProgramBlock(item, lane, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getForumProgramEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const x = timeToX(startMinutes);
+    const width = Math.max(18, timeToX(Math.min(endMinutes, timelineEnd)) - x);
+    const isSearchMatch = matchesForumProgramSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const pageUrl = getForumProgramPageUrl(item);
+    const useLink = !state.compactViewport && Boolean(pageUrl);
+    const block = document.createElement(useLink ? 'a' : 'button');
+
+    block.className = 'program-lane-block';
+    block.style.left = x + 'px';
+    block.style.width = width + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+
+    if (useLink) {
+      block.href = pageUrl;
+      block.target = '_blank';
+      block.rel = 'noopener noreferrer';
+      block.setAttribute('aria-label', item.title + ' 공식 페이지 새 탭 열기');
+      block.setAttribute('title', item.title + ' 공식 페이지 새 탭 열기');
+    } else {
+      block.type = 'button';
+      block.setAttribute('aria-label', item.title + ' 정보 열기');
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openForumProgramDetail(item);
+      });
+    }
+
+    if (width > 28) {
+      const title = document.createElement('div');
+      title.className = 'program-lane-text';
+      title.textContent = item.title;
+      block.appendChild(title);
+    }
+
+    block.addEventListener('mouseenter', () => showForumProgramTooltip(item, lane.color));
+    block.addEventListener('mousemove', moveTooltip);
+    block.addEventListener('mouseleave', hideTooltip);
+
+    return block;
+  }
+
+  function createCombinedOutdoorProgramBlock(item, lane, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getOutdoorScreeningEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const x = timeToX(startMinutes);
+    const width = Math.max(18, timeToX(Math.min(endMinutes, timelineEnd)) - x);
+    const isSearchMatch = matchesOutdoorScreeningSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const pageUrl = getOutdoorScreeningPageUrl(item);
+    const useLink = !state.compactViewport && Boolean(pageUrl);
+    const block = document.createElement(useLink ? 'a' : 'button');
+
+    block.className = 'program-lane-block';
+    block.style.left = x + 'px';
+    block.style.width = width + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+
+    if (useLink) {
+      block.href = pageUrl;
+      block.target = '_blank';
+      block.rel = 'noopener noreferrer';
+      block.setAttribute('aria-label', item.title + ' 공식 페이지 새 탭 열기');
+      block.setAttribute('title', item.title + ' 공식 페이지 새 탭 열기');
+    } else {
+      block.type = 'button';
+      block.setAttribute('aria-label', item.title + ' 정보 열기');
+      block.addEventListener('click', event => {
+        event.stopPropagation();
+        openOutdoorScreeningDetail(item);
+      });
+    }
+
+    if (width > 28) {
+      const title = document.createElement('div');
+      title.className = 'program-lane-text';
+      title.textContent = item.title;
+      block.appendChild(title);
+    }
+
+    block.addEventListener('mouseenter', () => showOutdoorScreeningTooltip(item, lane.color));
     block.addEventListener('mousemove', moveTooltip);
     block.addEventListener('mouseleave', hideTooltip);
 
@@ -1800,6 +1918,32 @@
     syncOverlayState();
   }
 
+  function openForumProgramDetail(item) {
+    if (!item) return;
+
+    closeMobileControls();
+    closeBookmarksPanel();
+    hideTooltip();
+    renderForumProgramDetail(item);
+    dom.detailChooserPanel.dataset.filmCode = '';
+    dom.detailChooserPanel.setAttribute('aria-hidden', 'false');
+    dom.detailChooserPanel.classList.add('open');
+    syncOverlayState();
+  }
+
+  function openOutdoorScreeningDetail(item) {
+    if (!item) return;
+
+    closeMobileControls();
+    closeBookmarksPanel();
+    hideTooltip();
+    renderOutdoorScreeningDetail(item);
+    dom.detailChooserPanel.dataset.filmCode = '';
+    dom.detailChooserPanel.setAttribute('aria-hidden', 'false');
+    dom.detailChooserPanel.classList.add('open');
+    syncOverlayState();
+  }
+
   function closeDetailChooser() {
     dom.detailChooserPanel.classList.remove('open');
     dom.detailChooserPanel.setAttribute('aria-hidden', 'true');
@@ -1918,6 +2062,88 @@
         ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">공식 페이지 (새 탭 열기)</a></div>'
         : '',
       '<p class="talktalk-detail-summary">' + escapeHtml(overview.description || '전주 곳곳의 야외 공간에서 진행되는 무료 상영 프로그램입니다.') + '</p>',
+      '<div class="talktalk-detail-grid">',
+      infoRows.map(row => [
+        '<div class="talktalk-detail-row">',
+        '<span class="talktalk-detail-row-label">' + escapeHtml(row[0]) + '</span>',
+        '<span class="talktalk-detail-row-value">' + escapeHtml(row[1]) + '</span>',
+        '</div>',
+      ].join('')).join(''),
+      '</div>',
+      overview.note
+        ? '<p class="talktalk-detail-note">' + escapeHtml(overview.note) + '</p>'
+        : '',
+      '</div>',
+    ].join('');
+  }
+
+  function renderForumProgramDetail(item) {
+    const overview = forumProgramsSource.overview || {};
+    const pageUrl = getForumProgramPageUrl(item);
+    const venueText = getForumProgramVenueText(item);
+    const infoRows = [
+      ['일정', formatDayLabel(item.date) + ' · ' + formatForumProgramTimeRange(item)],
+      ['장소', venueText],
+      ['프로그램', item.seriesLabel || overview.label || '전주포럼'],
+      ['참가비', item.feeLabel || overview.feeLabel || '무료 또는 별도 안내'],
+      ['사회', item.moderator || '—'],
+      ['발제', item.speakers || '—'],
+      ['패널', item.panelists || '—'],
+    ];
+
+    if (item.hostLabel) infoRows.push(['주최', item.hostLabel]);
+    if (item.organizerLabel) infoRows.push(['주관', item.organizerLabel]);
+
+    dom.detailChooserCloseBtn.setAttribute('aria-label', '전주포럼 상세 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', '전주포럼 상세 닫기');
+    dom.detailChooserTitle.textContent = item.title || overview.label || '전주포럼';
+    dom.detailChooserSubtitle.textContent = [item.seriesLabel || overview.label || '전주포럼', venueText].filter(Boolean).join(' · ');
+
+    dom.detailChooserList.innerHTML = [
+      '<div class="talktalk-detail">',
+      '<div class="talktalk-detail-series">' + escapeHtml(item.seriesLabel || overview.label || '전주포럼') + '</div>',
+      pageUrl
+        ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">공식 페이지 (새 탭 열기)</a></div>'
+        : '',
+      '<p class="talktalk-detail-summary">' + escapeHtml(item.summary || overview.description || '') + '</p>',
+      '<div class="talktalk-detail-grid">',
+      infoRows.map(row => [
+        '<div class="talktalk-detail-row">',
+        '<span class="talktalk-detail-row-label">' + escapeHtml(row[0]) + '</span>',
+        '<span class="talktalk-detail-row-value">' + escapeHtml(row[1]) + '</span>',
+        '</div>',
+      ].join('')).join(''),
+      '</div>',
+      overview.note
+        ? '<p class="talktalk-detail-note">' + escapeHtml(overview.note) + '</p>'
+        : '',
+      '</div>',
+    ].join('');
+  }
+
+  function renderOutdoorScreeningDetail(item) {
+    const overview = outdoorScreeningSource.overview || {};
+    const pageUrl = getOutdoorScreeningPageUrl(item);
+    const infoRows = [
+      ['일정', formatDayLabel(item.date) + ' · ' + formatOutdoorScreeningTimeRange(item)],
+      ['장소', item.venue || '—'],
+      ['프로그램', item.seriesLabel || overview.label || '야외 상영'],
+      ['참가비', overview.feeLabel || '무료'],
+      ['비고', getOutdoorScreeningTagsText(item) || '—'],
+    ];
+
+    dom.detailChooserCloseBtn.setAttribute('aria-label', '야외 상영 상세 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', '야외 상영 상세 닫기');
+    dom.detailChooserTitle.textContent = item.title || overview.label || '야외 상영';
+    dom.detailChooserSubtitle.textContent = [item.seriesLabel || overview.label || '야외 상영', item.venue].filter(Boolean).join(' · ');
+
+    dom.detailChooserList.innerHTML = [
+      '<div class="talktalk-detail">',
+      '<div class="talktalk-detail-series">' + escapeHtml(item.seriesLabel || overview.label || '야외 상영') + '</div>',
+      pageUrl
+        ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">공식 페이지 (새 탭 열기)</a></div>'
+        : '',
+      '<p class="talktalk-detail-summary">' + escapeHtml(item.summary || overview.description || '') + '</p>',
       '<div class="talktalk-detail-grid">',
       infoRows.map(row => [
         '<div class="talktalk-detail-row">',
@@ -2118,6 +2344,67 @@
     }
 
     parts.push('<div class="tt-bookmark-hint">클릭 시 공식 페이지 새 탭 열기</div>');
+
+    dom.tooltip.innerHTML = parts.join('');
+    dom.tooltip.classList.add('visible');
+    positionTooltip();
+  }
+
+  function showForumProgramTooltip(item, color) {
+    if (state.compactViewport) return;
+
+    const parts = [];
+    const venueText = getForumProgramVenueText(item);
+
+    parts.push('<div class="tt-section" style="color:' + color + '">' + escapeHtml(item.seriesLabel || '전주포럼') + '</div>');
+    parts.push('<div class="tt-title">' + escapeHtml(item.title) + '</div>');
+    parts.push('<div class="tt-meta">');
+    parts.push('<strong>장소</strong> ' + escapeHtml(venueText) + '<br>');
+    parts.push('<strong>시간</strong> ' + escapeHtml(formatForumProgramTimeRange(item)));
+    if (item.feeLabel) parts.push('<br><strong>참가비</strong> ' + escapeHtml(item.feeLabel));
+    if (item.moderator) parts.push('<br><strong>사회</strong> ' + escapeHtml(item.moderator));
+    parts.push('</div>');
+
+    if (item.speakers) {
+      parts.push('<div class="tt-shorts">발제 · ' + escapeHtml(item.speakers) + '</div>');
+    }
+
+    if (item.panelists) {
+      parts.push('<div class="tt-shorts">패널 · ' + escapeHtml(item.panelists) + '</div>');
+    }
+
+    parts.push('<div class="tt-bookmark-hint">클릭 시 공식 페이지 새 탭 열기</div>');
+
+    dom.tooltip.innerHTML = parts.join('');
+    dom.tooltip.classList.add('visible');
+    positionTooltip();
+  }
+
+  function showOutdoorScreeningTooltip(item, color) {
+    if (state.compactViewport) return;
+
+    const parts = [];
+
+    parts.push('<div class="tt-section" style="color:' + color + '">' + escapeHtml(item.seriesLabel || '야외 상영') + '</div>');
+    parts.push('<div class="tt-title">' + escapeHtml(item.title) + '</div>');
+    parts.push('<div class="tt-meta">');
+    parts.push('<strong>장소</strong> ' + escapeHtml(item.venue || '—') + '<br>');
+    parts.push('<strong>시간</strong> ' + escapeHtml(formatOutdoorScreeningTimeRange(item)) + '<br>');
+    parts.push('<strong>참가비</strong> 무료');
+    parts.push('</div>');
+
+    if (item.summary) {
+      parts.push('<div class="tt-shorts">🎬 ' + escapeHtml(item.summary) + '</div>');
+    }
+
+    if (getOutdoorScreeningTagsText(item)) {
+      parts.push('<div class="tt-shorts">📝 ' + escapeHtml(getOutdoorScreeningTagsText(item)) + '</div>');
+    }
+
+    const detailHint = getOutdoorScreeningPageUrl(item)
+      ? '클릭 시 공식 페이지 새 탭 열기'
+      : '클릭 시 상세 정보 열기';
+    parts.push('<div class="tt-bookmark-hint">' + escapeHtml(detailHint) + '</div>');
 
     dom.tooltip.innerHTML = parts.join('');
     dom.tooltip.classList.add('visible');
@@ -2427,7 +2714,7 @@
     const supplementalProgramLanes = state.viewMode === 'combined'
       ? getCombinedProgramLanes(dayData)
       : state.viewMode === 'schedule'
-        ? getAlleyCombinedProgramLanes()
+        ? getScheduleSupplementalProgramLanes()
         : [];
     const talkTalkItemsInActiveGroups = [];
     const timelineTalkTalkItems = talkTalkItemsInActiveGroups;
@@ -2744,6 +3031,14 @@
       return createMobileCombinedAlleyProgramBlock(entry.item, lane, venueIndex, timelineEnd);
     }
 
+    if (entry.kind === 'forum') {
+      return createMobileCombinedForumProgramBlock(entry.item, lane, venueIndex, timelineEnd);
+    }
+
+    if (entry.kind === 'outdoor') {
+      return createMobileCombinedOutdoorProgramBlock(entry.item, lane, venueIndex, timelineEnd);
+    }
+
     return createMobileCombinedProgramRowBlock(entry.row, lane, venueIndex, timelineEnd);
   }
 
@@ -2783,6 +3078,88 @@
     block.addEventListener('click', event => {
       event.stopPropagation();
       openAlleyProgramDetail(item);
+    });
+
+    return block;
+  }
+
+  function createMobileCombinedForumProgramBlock(item, lane, venueIndex, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getForumProgramEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(startMinutes);
+    const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
+    const isSearchMatch = matchesForumProgramSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const block = document.createElement('button');
+    const title = document.createElement('div');
+
+    block.type = 'button';
+    block.className = 'mobile-combined-program-block';
+    block.style.left = x + 6 + 'px';
+    block.style.top = y + 4 + 'px';
+    block.style.width = Math.max(24, columnWidth - 12) + 'px';
+    block.style.height = Math.max(26, height - 8) + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.setAttribute('aria-label', item.title + ' 정보 열기');
+
+    title.className = 'mobile-combined-program-text';
+    title.textContent = getMobileCombinedProgramLabel(item.title, height);
+    block.appendChild(title);
+
+    block.addEventListener('click', event => {
+      event.stopPropagation();
+      openForumProgramDetail(item);
+    });
+
+    return block;
+  }
+
+  function createMobileCombinedOutdoorProgramBlock(item, lane, venueIndex, timelineEnd) {
+    const startMinutes = timeToMinutes(item.startTime);
+    const endMinutes = getOutdoorScreeningEndMinutes(item);
+
+    if (startMinutes === null || endMinutes === null || startMinutes > timelineEnd) {
+      return null;
+    }
+
+    const columnWidth = getMobileVenueColumnWidth();
+    const x = venueIndex * columnWidth;
+    const y = mobileTimeToY(startMinutes);
+    const height = Math.max(28, mobileTimeToY(Math.min(endMinutes, timelineEnd)) - y);
+    const isSearchMatch = matchesOutdoorScreeningSearch(item);
+    const isDimmed = hasSearchQuery() && !isSearchMatch;
+    const block = document.createElement('button');
+    const title = document.createElement('div');
+
+    block.type = 'button';
+    block.className = 'mobile-combined-program-block';
+    block.style.left = x + 6 + 'px';
+    block.style.top = y + 4 + 'px';
+    block.style.width = Math.max(24, columnWidth - 12) + 'px';
+    block.style.height = Math.max(26, height - 8) + 'px';
+    block.style.background = getCombinedProgramBackground(lane.color, isSearchMatch, isDimmed, false);
+    block.style.borderColor = getCombinedProgramBorderColor(lane.color, isSearchMatch, isDimmed, false);
+    block.style.boxShadow = getCombinedProgramShadow(false, isSearchMatch);
+    block.style.opacity = isDimmed ? '0.16' : '1';
+    block.setAttribute('aria-label', item.title + ' 정보 열기');
+
+    title.className = 'mobile-combined-program-text';
+    title.textContent = getMobileCombinedProgramLabel(item.title, height);
+    block.appendChild(title);
+
+    block.addEventListener('click', event => {
+      event.stopPropagation();
+      openOutdoorScreeningDetail(item);
     });
 
     return block;
@@ -3205,7 +3582,61 @@
     alleyScreeningSource.items.forEach(item => {
       if (matchesAlleyScreeningSearch(item)) dates.add(item.date);
     });
+    forumProgramsSource.items.forEach(item => {
+      if (matchesForumProgramSearch(item)) dates.add(item.date);
+    });
+    outdoorScreeningSource.items.forEach(item => {
+      if (matchesOutdoorScreeningSearch(item)) dates.add(item.date);
+    });
     return dates;
+  }
+
+  function getViewModeSearchMatches() {
+    if (!hasSearchQuery()) return new Set();
+
+    const dayData = getCurrentDayData();
+    const matches = new Set();
+
+    if (getScheduleViewSearchMatchCount(dayData) > 0) {
+      matches.add('schedule');
+    }
+
+    if (getProgramsViewSearchMatchCount(dayData) > 0) {
+      matches.add('programs');
+    }
+
+    if (getCombinedViewSearchMatchCount(dayData) > 0) {
+      matches.add('combined');
+    }
+
+    return matches;
+  }
+
+  function getScheduleViewSearchMatchCount(dayData) {
+    const scheduleRows = dayData.filter(row => !isCombinedProgramRow(row));
+    const filmMatches = scheduleRows.filter(row => isFilmInActiveGroup(row) && matchesActiveListFilters(row)).length;
+    const alleyMatches = getAlleyScreeningItemsForDay().filter(item => isAlleyScreeningInActiveGroup(item)).length;
+    const outdoorMatches = getOutdoorScreeningItemsForDay().filter(item => isOutdoorScreeningInActiveGroup(item)).length;
+
+    return filmMatches + alleyMatches + outdoorMatches;
+  }
+
+  function getProgramsViewSearchMatchCount(dayData) {
+    const talkTalkMatches = getCombinedTalkTalkItems()
+      .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups))
+      .length;
+    const forumMatches = getForumProgramItemsForDay()
+      .filter(item => isForumProgramInActiveGroup(item))
+      .length;
+    const combinedRowMatches = dayData
+      .filter(row => isCombinedProgramRow(row) && isFilmInActiveGroup(row) && matchesActiveListFilters(row))
+      .length;
+
+    return talkTalkMatches + forumMatches + combinedRowMatches;
+  }
+
+  function getCombinedViewSearchMatchCount(dayData) {
+    return getScheduleViewSearchMatchCount(dayData) + getProgramsViewSearchMatchCount(dayData);
   }
 
   function groupFilmsByVenue(dayData) {
@@ -3254,6 +3685,21 @@
     return numberA - numberB;
   }
 
+  function sortProgramVenueLanes(left, right) {
+    const leftGroup = getVenueGroup(left.venue);
+    const rightGroup = getVenueGroup(right.venue);
+    const leftIndex = config.venueGroups.findIndex(group => group.id === leftGroup.id);
+    const rightIndex = config.venueGroups.findIndex(group => group.id === rightGroup.id);
+
+    if (leftIndex !== rightIndex) return leftIndex - rightIndex;
+
+    if (leftGroup.id === 'cgv' || leftGroup.id === 'mega') {
+      return sortVenueNames(left.venue, right.venue);
+    }
+
+    return left.venue.localeCompare(right.venue, 'ko');
+  }
+
   function getVenueGroup(venue) {
     return config.venueGroups.find(group => group.match(venue)) || config.venueGroups[config.venueGroups.length - 1];
   }
@@ -3272,6 +3718,18 @@
     const items = alleyScreeningSource.items.filter(item => item.date === state.currentDay);
     if (!hasSearchQuery()) return items;
     return items.filter(item => matchesAlleyScreeningSearch(item));
+  }
+
+  function getForumProgramItemsForDay() {
+    const items = forumProgramsSource.items.filter(item => item.date === state.currentDay);
+    if (!hasSearchQuery()) return items;
+    return items.filter(item => matchesForumProgramSearch(item));
+  }
+
+  function getOutdoorScreeningItemsForDay() {
+    const items = outdoorScreeningSource.items.filter(item => item.date === state.currentDay);
+    if (!hasSearchQuery()) return items;
+    return items.filter(item => matchesOutdoorScreeningSearch(item));
   }
 
   function getScheduleRowsForCurrentMode(dayData) {
@@ -3334,6 +3792,8 @@
     const grouped = new Map();
     const talkTalkItems = getCombinedTalkTalkItems()
       .filter(item => talkTalk.isInActiveGroup(item, state.activeGroups));
+    const forumItems = getForumProgramItemsForDay()
+      .filter(item => isForumProgramInActiveGroup(item));
     const combinedRows = dayData
       .filter(row => isCombinedProgramRow(row) && isFilmInActiveGroup(row));
 
@@ -3341,6 +3801,11 @@
       const venue = talkTalk.getVenue(item);
       const lane = ensureProgramsViewVenueLane(grouped, venue, COMBINED_PROGRAM_LANES[0].color);
       lane.items.push({ kind: 'talktalk', item });
+    });
+
+    forumItems.forEach(item => {
+      const lane = ensureProgramsViewVenueLane(grouped, item.venue, FORUM_PROGRAM_COLOR);
+      lane.items.push({ kind: 'forum', item });
     });
 
     combinedRows.forEach(row => {
@@ -3352,16 +3817,19 @@
       lane.items.push({ kind: 'row', row });
     });
 
-    return Array.from(grouped.values()).map(lane => {
-      lane.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
-      return lane;
-    });
+    return Array.from(grouped.values())
+      .map(lane => {
+        lane.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+        return lane;
+      })
+      .sort(sortProgramVenueLanes);
   }
 
   function ensureProgramsViewVenueLane(grouped, venue, color) {
     if (!grouped.has(venue)) {
       grouped.set(venue, {
         id: 'program-venue:' + venue,
+        groupLabel: '별도 프로그램',
         venue,
         label: venue,
         mobileLabel: shortenVenueName(venue),
@@ -3377,7 +3845,11 @@
 
   function getCombinedProgramLanes(dayData) {
     if (state.viewMode === 'schedule') return [];
-    return getProgramsViewLanes(dayData).concat(getAlleyCombinedProgramLanes());
+    return getProgramsViewLanes(dayData).concat(getScheduleSupplementalProgramLanes());
+  }
+
+  function getScheduleSupplementalProgramLanes() {
+    return getAlleyCombinedProgramLanes().concat(getOutdoorCombinedProgramLanes());
   }
 
   function getAlleyCombinedProgramLanes() {
@@ -3408,6 +3880,35 @@
     });
   }
 
+  function getOutdoorCombinedProgramLanes() {
+    const grouped = new Map();
+
+    getOutdoorScreeningItemsForDay()
+      .filter(item => isOutdoorScreeningInActiveGroup(item))
+      .forEach(item => {
+        const venue = item.venue || '기타 공간';
+        if (!grouped.has(venue)) {
+          grouped.set(venue, {
+            id: 'outdoor:' + venue,
+            groupLabel: outdoorScreeningSource.overview && outdoorScreeningSource.overview.label
+              ? outdoorScreeningSource.overview.label
+              : '야외 상영',
+            venue,
+            label: venue,
+            mobileLabel: shortenVenueName(venue),
+            color: OUTDOOR_SCREENING_COLOR,
+            items: [],
+          });
+        }
+        grouped.get(venue).items.push({ kind: 'outdoor', item });
+      });
+
+    return Array.from(grouped.values()).map(lane => {
+      lane.items.sort((left, right) => getCombinedProgramEntryStartTime(left).localeCompare(getCombinedProgramEntryStartTime(right)));
+      return lane;
+    });
+  }
+
   function getCombinedProgramTimelineRows(lanes) {
     return lanes.flatMap(lane => lane.items.map(entry => {
       if (entry.kind === 'talktalk') {
@@ -3424,6 +3925,20 @@
         };
       }
 
+      if (entry.kind === 'forum') {
+        return {
+          startTime: entry.item.startTime,
+          endTime: getForumProgramEndTime(entry.item),
+        };
+      }
+
+      if (entry.kind === 'outdoor') {
+        return {
+          startTime: entry.item.startTime,
+          endTime: getOutdoorScreeningEndTime(entry.item),
+        };
+      }
+
       return {
         startTime: entry.row.startTime,
         endTime: entry.row.endTime || entry.row.provisionalEndTime,
@@ -3435,6 +3950,8 @@
     if (!entry) return '99:99';
     if (entry.kind === 'talktalk') return entry.item.startTime || '99:99';
     if (entry.kind === 'alley') return entry.item.startTime || '99:99';
+    if (entry.kind === 'forum') return entry.item.startTime || '99:99';
+    if (entry.kind === 'outdoor') return entry.item.startTime || '99:99';
     return entry.row.startTime || '99:99';
   }
 
@@ -3498,6 +4015,42 @@
       item.title,
       item.venue,
       item.guestLabel,
+      Array.isArray(item.tags) ? item.tags.join(' ') : '',
+    ].filter(Boolean).join(' '));
+
+    return haystack.includes(state.normalizedSearchQuery);
+  }
+
+  function matchesForumProgramSearch(item) {
+    if (!hasSearchQuery()) return true;
+
+    const haystack = normalizeSearchValue([
+      forumProgramsSource.overview && forumProgramsSource.overview.label ? forumProgramsSource.overview.label : '전주포럼',
+      item.seriesLabel,
+      item.title,
+      item.summary,
+      item.venue,
+      item.venueDetail,
+      item.moderator,
+      item.speakers,
+      item.panelists,
+      item.hostLabel,
+      item.organizerLabel,
+      item.feeLabel,
+    ].filter(Boolean).join(' '));
+
+    return haystack.includes(state.normalizedSearchQuery);
+  }
+
+  function matchesOutdoorScreeningSearch(item) {
+    if (!hasSearchQuery()) return true;
+
+    const haystack = normalizeSearchValue([
+      outdoorScreeningSource.overview && outdoorScreeningSource.overview.label ? outdoorScreeningSource.overview.label : '야외 상영',
+      item.seriesLabel,
+      item.title,
+      item.summary,
+      item.venue,
       Array.isArray(item.tags) ? item.tags.join(' ') : '',
     ].filter(Boolean).join(' '));
 
@@ -3680,6 +4233,9 @@
       const enrichedRow = Object.assign({}, row);
       const linkedEvent = getLinkedProgramEvent(row);
       const manualDetailLink = getManualDetailLink(row);
+      const manualMetaEntry = manualDetailLink
+        ? createManualDetailMetaEntry(enrichedRow, manualDetailLink)
+        : null;
 
       if (linkedEvent) {
         enrichedRow.relatedEvent = linkedEvent;
@@ -3688,10 +4244,9 @@
       const metaEntry = scheduleMetaSource
         ? getScheduleMetaEntry(enrichedRow, scheduleMetaSource)
         : null;
-      const fallbackMetaEntry = !metaEntry && manualDetailLink
-        ? createManualDetailMetaEntry(enrichedRow, manualDetailLink)
-        : null;
-      const resolvedMetaEntry = metaEntry || fallbackMetaEntry;
+      const resolvedMetaEntry = manualDetailLink && manualDetailLink.overrideGeneratedDetail
+        ? manualMetaEntry
+        : (metaEntry || manualMetaEntry);
 
       if (!resolvedMetaEntry) return enrichedRow;
 
@@ -3946,6 +4501,20 @@
       : 'https://archive.jeonjufest.kr/community/news/view.asp?idx=9351';
   }
 
+  function getForumProgramPageUrl(item) {
+    if (item && item.pageUrl) return item.pageUrl;
+    return forumProgramsSource.overview && forumProgramsSource.overview.pageUrl
+      ? forumProgramsSource.overview.pageUrl
+      : '';
+  }
+
+  function getOutdoorScreeningPageUrl(item) {
+    if (item && item.pageUrl) return item.pageUrl;
+    return outdoorScreeningSource.overview && outdoorScreeningSource.overview.pageUrl
+      ? outdoorScreeningSource.overview.pageUrl
+      : '';
+  }
+
   function getAlleyScreeningDurationMinutes(item) {
     const itemDuration = item && item.durationMinutes ? Number(item.durationMinutes) : NaN;
     return Number.isFinite(itemDuration) && itemDuration > 0
@@ -3975,6 +4544,65 @@
   }
 
   function isAlleyScreeningInActiveGroup(item) {
+    return state.activeGroups.has(getVenueGroup(item.venue).id);
+  }
+
+  function getForumProgramEndMinutes(item) {
+    const startMinutes = timeToMinutes(item && item.startTime ? item.startTime : '');
+    const endMinutes = timeToMinutes(item && item.endTime ? item.endTime : '');
+
+    if (startMinutes === null) return null;
+    if (endMinutes !== null) return endMinutes;
+    return startMinutes + OPEN_ENDED_SLOT_FALLBACK_MINUTES;
+  }
+
+  function getForumProgramEndTime(item) {
+    const endMinutes = getForumProgramEndMinutes(item);
+    return endMinutes === null ? '' : minutesToClockLabel(endMinutes);
+  }
+
+  function formatForumProgramTimeRange(item) {
+    if (!item || !item.startTime) return '—';
+    return item.endTime ? item.startTime + ' – ' + item.endTime : item.startTime;
+  }
+
+  function getForumProgramVenueText(item) {
+    if (!item) return '—';
+    if (item.venue && item.venueDetail) {
+      return item.venue + ' · ' + item.venueDetail;
+    }
+    return item.venue || '—';
+  }
+
+  function isForumProgramInActiveGroup(item) {
+    return state.activeGroups.has(getVenueGroup(item.venue).id);
+  }
+
+  function getOutdoorScreeningEndMinutes(item) {
+    const startMinutes = timeToMinutes(item && item.startTime ? item.startTime : '');
+    const endMinutes = timeToMinutes(item && item.endTime ? item.endTime : '');
+
+    if (startMinutes === null) return null;
+    if (endMinutes !== null) return endMinutes;
+    return startMinutes + 90;
+  }
+
+  function getOutdoorScreeningEndTime(item) {
+    const endMinutes = getOutdoorScreeningEndMinutes(item);
+    return endMinutes === null ? '' : minutesToClockLabel(endMinutes);
+  }
+
+  function formatOutdoorScreeningTimeRange(item) {
+    if (!item || !item.startTime) return '—';
+    return item.endTime ? item.startTime + ' – ' + item.endTime : item.startTime;
+  }
+
+  function getOutdoorScreeningTagsText(item) {
+    const tags = Array.isArray(item && item.tags) ? item.tags.filter(Boolean) : [];
+    return tags.join(' · ');
+  }
+
+  function isOutdoorScreeningInActiveGroup(item) {
     return state.activeGroups.has(getVenueGroup(item.venue).id);
   }
 
