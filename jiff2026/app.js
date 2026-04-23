@@ -508,10 +508,10 @@
 
     dom.mobileLayoutToggleBtn.hidden = !shouldShow;
     dom.mobileLayoutToggleBtn.classList.toggle('is-active', isDesktopMode);
+    dom.mobileLayoutToggleBtn.dataset.viewMode = isDesktopMode ? 'horizontal' : 'vertical';
     dom.mobileLayoutToggleBtn.setAttribute('aria-pressed', isDesktopMode ? 'true' : 'false');
     dom.mobileLayoutToggleBtn.setAttribute('aria-label', '현재 ' + currentModeLabel + ' 보기, 눌러서 ' + nextModeLabel + ' 보기로 전환');
     dom.mobileLayoutToggleBtn.setAttribute('title', nextModeLabel + ' 보기로 전환');
-    dom.mobileLayoutToggleBtn.textContent = '보기 방향: ' + currentModeLabel;
   }
 
   function renderMobileNotice() {

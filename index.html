@@ -94,7 +94,14 @@
     <button type="button" class="view-mode-tab" data-view-mode="programs" data-desktop-label="별도 프로그램" data-mobile-label="별도 프로그램" aria-pressed="false">별도 프로그램</button>
     <button type="button" class="view-mode-tab" data-view-mode="combined" data-desktop-label="같이 보기" data-mobile-label="같이 보기" aria-pressed="false">같이 보기</button>
   </div>
-  <button type="button" class="mobile-layout-toggle-btn" id="mobileLayoutToggleBtn" aria-pressed="false">보기 방향: 세로</button>
+  <div class="mobile-layout-toggle-label">시간표 방향</div>
+  <button type="button" class="mobile-layout-toggle-btn" id="mobileLayoutToggleBtn" aria-pressed="false" data-view-mode="vertical">
+    <span class="mobile-layout-toggle-track" aria-hidden="true">
+      <span class="mobile-layout-toggle-thumb"></span>
+      <span class="mobile-layout-toggle-option mobile-layout-toggle-option-vertical">세로</span>
+      <span class="mobile-layout-toggle-option mobile-layout-toggle-option-horizontal">가로</span>
+    </span>
+  </button>
   <div class="mobile-controls-section-title">상영관</div>
   <div class="sep"></div>
   <span class="filter-label">상영관</span>
