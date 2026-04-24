@@ -45,7 +45,7 @@
   const state = {
     allData,
     currentDay: resolveInitialDay(),
-    viewMode: 'schedule',
+    viewMode: 'combined',
     activeGroups: new Set(config.defaultState.activeGroups),
     activeSections: null,
     searchQuery: '',
