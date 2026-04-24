@@ -2049,6 +2049,7 @@
       ['비고', getAlleyScreeningTagsText(item) || '—'],
       ['참석자', item.guestLabel || '—'],
     ];
+    if (item.moderator) infoRows.push(['모더레이터', item.moderator]);
 
     dom.detailChooserCloseBtn.setAttribute('aria-label', '골목상영 상세 닫기');
     dom.detailChooserCloseBtn.setAttribute('title', '골목상영 상세 닫기');
@@ -2337,6 +2338,9 @@
 
     if (item.guestLabel) {
       parts.push('<div class="tt-shorts">👥 참석자 · ' + escapeHtml(item.guestLabel) + '</div>');
+    }
+    if (item.moderator) {
+      parts.push('<div class="tt-shorts">🎙 모더레이터 · ' + escapeHtml(item.moderator) + '</div>');
     }
 
     if (getAlleyScreeningTagsText(item)) {
@@ -4015,6 +4019,7 @@
       item.title,
       item.venue,
       item.guestLabel,
+      item.moderator,
       Array.isArray(item.tags) ? item.tags.join(' ') : '',
     ].filter(Boolean).join(' '));
 
