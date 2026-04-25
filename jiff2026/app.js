@@ -2082,27 +2082,29 @@
     const overview = forumProgramsSource.overview || {};
     const pageUrl = getForumProgramPageUrl(item);
     const venueText = getForumProgramVenueText(item);
+    const programLabel = item.seriesLabel || overview.label || '별도 프로그램';
     const infoRows = [
       ['일정', formatDayLabel(item.date) + ' · ' + formatForumProgramTimeRange(item)],
       ['장소', venueText],
-      ['프로그램', item.seriesLabel || overview.label || '전주포럼'],
+      ['프로그램', programLabel],
       ['참가비', item.feeLabel || overview.feeLabel || '무료 또는 별도 안내'],
-      ['사회', item.moderator || '—'],
-      ['발제', item.speakers || '—'],
-      ['패널', item.panelists || '—'],
     ];
+    if (item.guestLabel) infoRows.push([item.guestRoleLabel || '게스트', item.guestLabel]);
+    if (item.moderator) infoRows.push([item.moderatorRoleLabel || '사회', item.moderator]);
+    if (item.speakers) infoRows.push([item.speakersRoleLabel || '발제', item.speakers]);
+    if (item.panelists) infoRows.push([item.panelistsRoleLabel || '패널', item.panelists]);
 
     if (item.hostLabel) infoRows.push(['주최', item.hostLabel]);
     if (item.organizerLabel) infoRows.push(['주관', item.organizerLabel]);
 
-    dom.detailChooserCloseBtn.setAttribute('aria-label', '전주포럼 상세 닫기');
-    dom.detailChooserCloseBtn.setAttribute('title', '전주포럼 상세 닫기');
-    dom.detailChooserTitle.textContent = item.title || overview.label || '전주포럼';
-    dom.detailChooserSubtitle.textContent = [item.seriesLabel || overview.label || '전주포럼', venueText].filter(Boolean).join(' · ');
+    dom.detailChooserCloseBtn.setAttribute('aria-label', '별도 프로그램 상세 닫기');
+    dom.detailChooserCloseBtn.setAttribute('title', '별도 프로그램 상세 닫기');
+    dom.detailChooserTitle.textContent = item.title || programLabel;
+    dom.detailChooserSubtitle.textContent = [programLabel, venueText].filter(Boolean).join(' · ');
 
     dom.detailChooserList.innerHTML = [
       '<div class="talktalk-detail">',
-      '<div class="talktalk-detail-series">' + escapeHtml(item.seriesLabel || overview.label || '전주포럼') + '</div>',
+      '<div class="talktalk-detail-series">' + escapeHtml(programLabel) + '</div>',
       pageUrl
         ? '<div class="dc-mobile-actions dc-mobile-actions-primary"><a class="dc-mobile-action" href="' + escapeHtml(pageUrl) + '" target="_blank" rel="noopener noreferrer">공식 페이지 (새 탭 열기)</a></div>'
         : '',
@@ -2359,22 +2361,24 @@
 
     const parts = [];
     const venueText = getForumProgramVenueText(item);
+    const programLabel = item.seriesLabel || '별도 프로그램';
 
-    parts.push('<div class="tt-section" style="color:' + color + '">' + escapeHtml(item.seriesLabel || '전주포럼') + '</div>');
+    parts.push('<div class="tt-section" style="color:' + color + '">' + escapeHtml(programLabel) + '</div>');
     parts.push('<div class="tt-title">' + escapeHtml(item.title) + '</div>');
     parts.push('<div class="tt-meta">');
     parts.push('<strong>장소</strong> ' + escapeHtml(venueText) + '<br>');
     parts.push('<strong>시간</strong> ' + escapeHtml(formatForumProgramTimeRange(item)));
     if (item.feeLabel) parts.push('<br><strong>참가비</strong> ' + escapeHtml(item.feeLabel));
-    if (item.moderator) parts.push('<br><strong>사회</strong> ' + escapeHtml(item.moderator));
+    if (item.guestLabel) parts.push('<br><strong>' + escapeHtml(item.guestRoleLabel || '게스트') + '</strong> ' + escapeHtml(item.guestLabel));
+    if (item.moderator) parts.push('<br><strong>' + escapeHtml(item.moderatorRoleLabel || '사회') + '</strong> ' + escapeHtml(item.moderator));
     parts.push('</div>');
 
     if (item.speakers) {
-      parts.push('<div class="tt-shorts">발제 · ' + escapeHtml(item.speakers) + '</div>');
+      parts.push('<div class="tt-shorts">' + escapeHtml(item.speakersRoleLabel || '발제') + ' · ' + escapeHtml(item.speakers) + '</div>');
     }
 
     if (item.panelists) {
-      parts.push('<div class="tt-shorts">패널 · ' + escapeHtml(item.panelists) + '</div>');
+      parts.push('<div class="tt-shorts">' + escapeHtml(item.panelistsRoleLabel || '패널') + ' · ' + escapeHtml(item.panelists) + '</div>');
     }
 
     parts.push('<div class="tt-bookmark-hint">클릭 시 공식 페이지 새 탭 열기</div>');
@@ -4036,6 +4040,8 @@
       item.summary,
       item.venue,
       item.venueDetail,
+      item.guestRoleLabel,
+      item.guestLabel,
       item.moderator,
       item.speakers,
       item.panelists,

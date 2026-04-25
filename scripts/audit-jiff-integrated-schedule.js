@@ -27,6 +27,8 @@ const EVENT_URLS = {
   alley: 'https://archive.jeonjufest.kr/community/news/view.asp?idx=9351',
   forum: 'https://jeonjufest.kr/event/jeonju_forum.asp',
   outdoor: 'https://jeonjufest.kr/event/special_program.asp',
+  show: 'https://jeonjufest.kr/event/show.asp',
+  outdoorCinema: 'https://jeonjufest.kr/event/outdoor_cinema.asp',
 };
 
 main().catch(error => {
@@ -136,7 +138,9 @@ async function fetchIntegratedOfficialRows(days) {
   rows.push(...parseOfficialTalkTalkRows(await fetchTextWithDelay(EVENT_URLS.talktalk)));
   rows.push(...parseOfficialAlleyRows(await fetchTextWithDelay(EVENT_URLS.alley)));
   rows.push(...parseOfficialForumRows(await fetchTextWithDelay(EVENT_URLS.forum)));
+  rows.push(...parseOfficialShowRows(await fetchTextWithDelay(EVENT_URLS.show)));
   rows.push(...parseOfficialOutdoorRows(await fetchTextWithDelay(EVENT_URLS.outdoor)));
+  rows.push(...parseOfficialOutdoorCinemaRows(await fetchTextWithDelay(EVENT_URLS.outdoorCinema)));
 
   return rows;
 }
@@ -323,6 +327,68 @@ function parseOfficialOutdoorRows(html) {
     startTime: range.startTime,
     endTime: range.endTime,
   }));
+}
+
+function parseOfficialShowRows(html) {
+  const rows = [];
+  const tableHtml = matchFirst(
+    stripHtmlComments(html),
+    /(<table[^>]*>[\s\S]*?<th class="left">일정<\/th>[\s\S]*?<th>시간<\/th>[\s\S]*?<th>장소<\/th>[\s\S]*?<th>공연내용<\/th>[\s\S]*?<\/table>)/i
+  );
+  const rowPattern = /<tr>([\s\S]*?)<\/tr>/gi;
+  let rowMatch = rowPattern.exec(tableHtml);
+
+  while (rowMatch) {
+    const cellHtmls = extractTableCellHtml(rowMatch[1]);
+    if (cellHtmls.length < 4 || /일정/.test(cleanText(cellHtmls[0]))) {
+      rowMatch = rowPattern.exec(tableHtml);
+      continue;
+    }
+
+    rows.push(makeRow({
+      source: 'official:show',
+      date: toDateFromKoreanText(cellHtmls[0]),
+      venue: cleanText(cellHtmls[2]),
+      title: extractShowProgramTitle(cellHtmls[3]),
+      startTime: cleanText(cellHtmls[1]),
+      endTime: '',
+    }));
+
+    rowMatch = rowPattern.exec(tableHtml);
+  }
+
+  return rows;
+}
+
+function parseOfficialOutdoorCinemaRows(html) {
+  const rows = [];
+  const tableHtml = matchFirst(
+    stripHtmlComments(html),
+    /(<table[^>]*>[\s\S]*?<th>일정<\/th>[\s\S]*?<th>시간<\/th>[\s\S]*?<th>상영작<\/th>[\s\S]*?<\/table>)/i
+  );
+  const rowPattern = /<tr>([\s\S]*?)<\/tr>/gi;
+  let rowMatch = rowPattern.exec(tableHtml);
+
+  while (rowMatch) {
+    const cells = extractTableCells(rowMatch[1]);
+    if (cells.length < 3 || /일정/.test(cells[0])) {
+      rowMatch = rowPattern.exec(tableHtml);
+      continue;
+    }
+
+    rows.push(makeRow({
+      source: 'official:outdoor-cinema',
+      date: toDateFromCompactKorean(cells[0]),
+      venue: '전라감영 서편부지',
+      title: cells[2],
+      startTime: cells[1],
+      endTime: '',
+    }));
+
+    rowMatch = rowPattern.exec(tableHtml);
+  }
+
+  return rows;
 }
 
 function compareRows(localRows, officialRows) {
@@ -548,6 +614,28 @@ function extractTableCells(rowHtml) {
   return cells;
 }
 
+function extractTableCellHtml(rowHtml) {
+  const cells = [];
+  const cellPattern = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+  let cellMatch = cellPattern.exec(rowHtml);
+
+  while (cellMatch) {
+    cells.push(cellMatch[1]);
+    cellMatch = cellPattern.exec(rowHtml);
+  }
+
+  return cells;
+}
+
+function extractShowProgramTitle(cellHtml) {
+  return cellHtml
+    .split(/<br\s*\/?>/i)
+    .map(part => cleanText(part))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join(' ');
+}
+
 function splitVenueDetail(value) {
   const cleaned = cleanText(value);
   const match = /^(.*?)\s*\((.*?)\)\s*$/.exec(cleaned);
@@ -592,6 +680,20 @@ function parseKoreanDateRange(value) {
     startTime: normalizeTime(match[5]),
     endTime: normalizeTime(match[6]),
   };
+}
+
+function toDateFromCompactKorean(value) {
+  const cleaned = cleanText(value);
+  const match = /(\d{1,2})\.(\d{1,2})/.exec(cleaned);
+  if (!match) return '';
+  return toDate(match[1], match[2]);
+}
+
+function toDateFromKoreanText(value) {
+  const cleaned = cleanText(value);
+  const match = /(\d{1,2})월\s*(\d{1,2})일/.exec(cleaned);
+  if (!match) return '';
+  return toDate(match[1], match[2]);
 }
 
 function addMinutesToTime(time, minutes) {
